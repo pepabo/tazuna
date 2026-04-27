@@ -1,0 +1,36 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  clusterName:
+    type: string
+    required: true
+    description: "Cluster name"
+  hostname:
+    type: string
+    format: hostname
+    description: "Hostname"
+  apiKey:
+    type: string
+    required_with: [secretKey]
+    description: "API key"
+  secretKey:
+    type: string
+    description: "Secret key"
+  fallbackEndpoint:
+    type: string
+    required_without: [serviceEndpoint]
+    description: "Fallback endpoint"
+  serviceEndpoint:
+    type: string
+    description: "Service endpoint"
+  ingressHost:
+    type: string
+    description: "Ingress host"
+  serviceIP:
+    type: string
+    format: ip
+    description: "Service IP"
+rules:
+  - type: oneof_required
+    vars: [ingressHost, serviceIP]
+    message: "At least one of these is required"

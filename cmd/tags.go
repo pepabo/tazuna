@@ -1,0 +1,65 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/cockroachdb/errors"
+	v1 "github.com/pepabo/tazuna/api/v1"
+	"github.com/pepabo/tazuna/pkg/runner"
+	"github.com/pepabo/tazuna/pkg/validator"
+	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
+)
+
+var tagsCmd = &cobra.Command{
+	Use:   "tags",
+	Short: "List the tags defined in tazuna.yaml",
+	Long: `List the tags attached to manifests in tazuna.yaml together with the manifest names associated with each tag.
+
+Examples:
+  tazuna tags -f tazuna.yaml`,
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
+		path, err := cmd.Flags().GetString("file-path")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		defer func() {
+			if cerr := f.Close(); cerr != nil {
+				err = errors.WithStack(cerr)
+			}
+		}()
+
+		tazuna := v1.Tazuna{}
+		if err := yaml.NewDecoder(f).Decode(&tazuna); err != nil {
+			return errors.WithStack(err)
+		}
+
+		if err := validator.ValidateTazuna(&tazuna); err != nil {
+			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
+		}
+
+		r := runner.NewTazunaRunner(nil, nil, nil)
+
+		tags, err := r.ListTags(cmd.Context(), &tazuna, path)
+		if err != nil {
+			return errors.Wrapf(err, "failed to list tags for tazuna.yaml at %s", path)
+		}
+
+		for tag, relatedNames := range tags {
+			fmt.Printf("%s:\n", tag)
+			for _, name := range relatedNames {
+				fmt.Printf("- %s\n", name)
+			}
+		}
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(tagsCmd)
+}

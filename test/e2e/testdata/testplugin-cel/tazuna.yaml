@@ -1,0 +1,36 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "testplugin-cel-nginx"
+      description: "ADR005 Phase 3 e2e: verifies complex CEL conditions for WaitUntil"
+      type: kustomize
+      path: ./kustomize
+      tags:
+        - testplugin-cel
+      tests:
+        - type: WaitUntil
+          timeoutSeconds: 60
+          intervalSeconds: 1
+          waitUntil:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+            namespace: tazuna-e2e-testplugin-cel
+            name: nginx
+            condition: >-
+              object.status.readyReplicas == 1
+              && object.metadata.labels["app"] == "nginx"
+              && size(object.spec.template.spec.containers) > 0
+        - type: WaitUntil
+          timeoutSeconds: 60
+          intervalSeconds: 1
+          waitUntil:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+            namespace: tazuna-e2e-testplugin-cel
+            name: nginx
+            condition: >-
+              has(object.status.availableReplicas)
+              && object.status.availableReplicas >= 1

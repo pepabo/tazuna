@@ -1,0 +1,9 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  apiKey:
+    type: string
+    required: true
+    required_with: [secretKey]
+  secretKey:
+    type: string

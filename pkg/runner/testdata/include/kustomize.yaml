@@ -1,0 +1,10 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "kustomize deployment"
+      description: "deploy nginx with kustomize"
+      path: "kustomize"
+      type: "kustomize"
+      tags:
+        - "nginx"

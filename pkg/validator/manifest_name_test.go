@@ -1,0 +1,174 @@
+package validator
+
+import (
+	"strings"
+	"testing"
+
+	v1 "github.com/pepabo/tazuna/api/v1"
+)
+
+func TestValidateManifestNames(t *testing.T) {
+	tests := []struct {
+		name        string
+		manifests   []v1.Manifest
+		wantErr     bool
+		errContains []string
+	}{
+		{
+			name: "all valid",
+			manifests: []v1.Manifest{
+				{Name: "kustomize-monitoring"},
+				{Name: "helmfile-example"},
+				{Name: "genesissecret-base"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid names with hyphens and underscores",
+			manifests: []v1.Manifest{
+				{Name: "my-manifest_01"},
+				{Name: "A-Z_test"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty name",
+			manifests: []v1.Manifest{
+				{Name: ""},
+			},
+			wantErr:     true,
+			errContains: []string{"name is required"},
+		},
+		{
+			name: "invalid characters with dot",
+			manifests: []v1.Manifest{
+				{Name: "my.manifest"},
+			},
+			wantErr:     true,
+			errContains: []string{"invalid characters"},
+		},
+		{
+			name: "invalid characters with slash",
+			manifests: []v1.Manifest{
+				{Name: "path/to"},
+			},
+			wantErr:     true,
+			errContains: []string{"invalid characters"},
+		},
+		{
+			name: "invalid characters with space",
+			manifests: []v1.Manifest{
+				{Name: "has space"},
+			},
+			wantErr:     true,
+			errContains: []string{"invalid characters"},
+		},
+		{
+			name: "reserved name _metadata",
+			manifests: []v1.Manifest{
+				{Name: "_metadata"},
+			},
+			wantErr:     true,
+			errContains: []string{"reserved"},
+		},
+		{
+			name: "duplicate names",
+			manifests: []v1.Manifest{
+				{Name: "same-name"},
+				{Name: "same-name"},
+			},
+			wantErr:     true,
+			errContains: []string{"duplicated"},
+		},
+		{
+			name: "multiple errors",
+			manifests: []v1.Manifest{
+				{Name: ""},
+				{Name: "valid-name"},
+				{Name: "bad.name"},
+			},
+			wantErr:     true,
+			errContains: []string{"name is required", "invalid characters"},
+		},
+		{
+			name: "mix of empty and duplicate",
+			manifests: []v1.Manifest{
+				{Name: ""},
+				{Name: "dup"},
+				{Name: "dup"},
+			},
+			wantErr:     true,
+			errContains: []string{"name is required", "duplicated"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateManifestNames(tt.manifests)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateManifestNames() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if err != nil {
+				for _, contains := range tt.errContains {
+					if !strings.Contains(err.Error(), contains) {
+						t.Errorf("expected error to contain %q, got %v", contains, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCollectAllManifests(t *testing.T) {
+	manifests := []v1.Manifest{
+		{Name: "top1"},
+		{
+			Name: "parallel1",
+			Parallel: &v1.ManifestParallel{
+				Children: []v1.Manifest{
+					{Name: "child1"},
+					{Name: "child2"},
+				},
+			},
+		},
+		{Name: "top2"},
+	}
+
+	result := CollectAllManifests(manifests)
+	if len(result) != 5 {
+		t.Fatalf("expected 5 manifests, got %d", len(result))
+	}
+
+	expected := []string{"top1", "parallel1", "child1", "child2", "top2"}
+	for i, name := range expected {
+		if result[i].Name != name {
+			t.Errorf("result[%d].Name = %q, want %q", i, result[i].Name, name)
+		}
+	}
+}
+
+func TestCollectAllManifests_NestedParallel(t *testing.T) {
+	manifests := []v1.Manifest{
+		{
+			Name: "outer",
+			Parallel: &v1.ManifestParallel{
+				Children: []v1.Manifest{
+					{
+						Name: "inner",
+						Parallel: &v1.ManifestParallel{
+							Children: []v1.Manifest{
+								{Name: "deep"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result := CollectAllManifests(manifests)
+	if len(result) != 3 {
+		t.Fatalf("expected 3 manifests, got %d", len(result))
+	}
+}

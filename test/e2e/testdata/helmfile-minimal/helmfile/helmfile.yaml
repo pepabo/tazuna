@@ -1,0 +1,7 @@
+releases:
+  - name: simple-chart
+    namespace: tazuna-e2e-helmfile
+    chart: ./simple-chart
+    version: 0.1.0
+    values:
+      - ./simple-chart/values.yaml

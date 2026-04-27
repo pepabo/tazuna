@@ -1,0 +1,10 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "kustomize-minimal-nginx"
+      description: "ADR005 Phase 2 e2e: minimal apply scenario for the kustomize manager alone"
+      type: kustomize
+      path: ./kustomize
+      tags:
+        - kustomize-minimal

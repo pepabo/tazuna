@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-alpha
+  namespace: tazuna-e2e-tags-filter
+  labels:
+    app: nginx-alpha
+    tazuna.pepabo.com/e2e: tags-filter-minimal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-alpha
+  template:
+    metadata:
+      labels:
+        app: nginx-alpha
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80

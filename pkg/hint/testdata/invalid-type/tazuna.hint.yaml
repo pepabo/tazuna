@@ -1,0 +1,6 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  badVar:
+    type: integer
+    required: false

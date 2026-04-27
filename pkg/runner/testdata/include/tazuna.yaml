@@ -1,0 +1,9 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "include manifest"
+      description: "includes kustomize and genesisSecret manifests"
+      includes:
+        - path: "kustomize.yaml"
+        - path: "genesissecret.yaml"

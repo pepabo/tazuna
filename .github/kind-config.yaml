@@ -1,0 +1,18 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.32.0
+    kubeadmConfigPatches:
+      - |
+        kind: ClusterConfiguration
+        etcd:
+          local:
+            extraArgs:
+              # etcdのクォータを8GBに拡張 (デフォルト2GB)
+              quota-backend-bytes: "8589934592"
+              # ハートビート・選出タイムアウトを緩和してディスクI/O遅延に対する耐性を向上
+              heartbeat-interval: "300"
+              election-timeout: "3000"
+              # スナップショット数を増やして圧縮頻度を下げる
+              snapshot-count: "10000"

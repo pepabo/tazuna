@@ -1,0 +1,12 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  labelFromStatic:
+    type: string
+    required: true
+    description: "Label value"
+  environment:
+    type: string
+    required: false
+    default: "production"
+    description: "Environment name"

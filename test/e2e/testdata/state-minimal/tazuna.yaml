@@ -1,0 +1,10 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "state-minimal-nginx"
+      description: "ADR005 Phase 2 e2e: minimal scenario for state list / state diff"
+      type: kustomize
+      path: ./kustomize
+      tags:
+        - state-minimal

@@ -1,0 +1,10 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  foo:
+    type: string
+  bar:
+    type: string
+rules:
+  - type: unknown_rule
+    vars: [foo, bar]
