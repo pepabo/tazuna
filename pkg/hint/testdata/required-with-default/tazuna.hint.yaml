@@ -1,0 +1,7 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  contradictory:
+    type: string
+    required: true
+    default: "should-not-have-default"

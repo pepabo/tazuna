@@ -1,0 +1,37 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "testplugin-minimal-nginx"
+      description: "ADR005 Phase 2 e2e: verifies that testplugin (WaitUntil / ExistNonExist) works against a real cluster"
+      type: kustomize
+      path: ./kustomize
+      tags:
+        - testplugin-minimal
+      tests:
+        - type: WaitUntil
+          timeoutSeconds: 60
+          intervalSeconds: 1
+          waitUntil:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+            namespace: tazuna-e2e-testplugin
+            name: nginx
+            condition: "object.status.readyReplicas == 1"
+        - type: ExistNonExist
+          existNonExist:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+            namespace: tazuna-e2e-testplugin
+            name: nginx
+            shouldExist: true
+        - type: ExistNonExist
+          existNonExist:
+            resource:
+              apiVersion: apps/v1
+              kind: Deployment
+            namespace: tazuna-e2e-testplugin
+            name: nonexistent-resource
+            shouldExist: false

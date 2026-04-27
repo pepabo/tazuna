@@ -1,0 +1,12 @@
+spec:
+  manifests:
+  - name: kustomize1
+    type: kustomize
+    path: ./kustomize1
+    tags:
+      - kustomize1
+  - name: kustomize2
+    type: kustomize
+    path: ./kustomize2
+    tags:
+      - kustomize2

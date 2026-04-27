@@ -1,0 +1,10 @@
+
+releases:
+  - name: mylocalrelease
+    namespace: default
+    chart: ./mylocalchart
+    version: 0.1.0
+    values:
+      - ./mylocalchart/values.yaml
+      - labelFromOp: {{ .StateValues.labelFromOp | default "default-label" }}
+      - labelFromStatic: {{ .StateValues.labelFromStatic | default "static-label" }}

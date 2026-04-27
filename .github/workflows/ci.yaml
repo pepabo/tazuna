@@ -1,0 +1,207 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOMODCACHE: ${{ github.workspace }}/.go/pkg/mod
+  GOCACHE: ${{ github.workspace }}/.go/cache
+  GOLANGCI_LINT_CACHE: ${{ github.workspace }}/.golangci-lint-cache
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: go.mod
+        cache: false
+    - name: Cache Go modules
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/pkg/mod
+        key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+    - name: Cache Go build
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+    - name: test
+      run: go test ./...
+    - name: build
+      run: go build .
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: go.mod
+        cache: false
+    - name: Cache Go modules
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/pkg/mod
+        key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+    - name: Cache Go build
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+    - name: Cache golangci-lint
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.golangci-lint-cache
+        key: ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}
+    - name: Install golangci-lint
+      uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
+      with:
+        install-only: true
+    - name: lint
+      run: golangci-lint run
+
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest 
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: go.mod
+        cache: false
+    - name: Cache Go modules
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/pkg/mod
+        key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+    - name: Cache Go build
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+    - name: Install Helm # helmfile managerのintegrationテストにhelmが必要
+      uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+      with:
+        version: v3.17.0
+    - name: Integration Tests
+      run: go test -v -tags=integration ./...
+
+  e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HELM_VERSION: v3.17.0
+      KIND_VERSION: v0.31.0
+      HELMFILE_VERSION: v1.4.4
+      KUSTOMIZE_VERSION: v5.8.1
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: go.mod
+        cache: false
+    - name: Cache Go modules
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/pkg/mod
+        key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+    - name: Cache Go build
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: ${{ github.workspace }}/.go/cache
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+    - name: Set up home directory and PATH
+      run: |
+        if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
+          ACTUAL_HOME=$(getent passwd "$(id -un)" | cut -d: -f6)
+          echo "Fixing HOME: '${HOME}' -> '${ACTUAL_HOME}'"
+          echo "HOME=${ACTUAL_HOME}" >> $GITHUB_ENV
+          export HOME="$ACTUAL_HOME"
+        fi
+        echo "whoami: $(whoami), HOME: $HOME"
+        mkdir -p "$HOME/.local/bin"
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        echo "PATH=$HOME/.local/bin:$PATH" >> $GITHUB_ENV
+    - name: Restore binary cache
+      id: cache-binaries
+      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+      with:
+        path: |
+          ~/.local/bin/helm
+          ~/.local/bin/kubectl
+          ~/.local/bin/kind
+          ~/.local/bin/helmfile
+          ~/.local/bin/kustomize
+        key: binaries-${{ runner.os }}-helm-${{ env.HELM_VERSION }}-kind-${{ env.KIND_VERSION }}-helmfile-${{ env.HELMFILE_VERSION }}-kustomize-${{ env.KUSTOMIZE_VERSION }}
+        restore-keys: |
+          binaries-${{ runner.os }}-helm-${{ env.HELM_VERSION }}-kind-${{ env.KIND_VERSION }}-helmfile-${{ env.HELMFILE_VERSION }}-
+    - name: Create binary directory
+      run: |
+        mkdir -p "$HOME/.local/bin"
+    - name: Install Helm
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL https://get.helm.sh/helm-${{ env.HELM_VERSION }}-linux-amd64.tar.gz -o helm.tar.gz
+        tar -zxvf helm.tar.gz
+        mv linux-amd64/helm ~/.local/bin/helm
+        chmod +x ~/.local/bin/helm
+    - name: Install kubectl
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
+      run: |
+        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+        chmod +x kubectl
+        mv kubectl ~/.local/bin/
+    - name: Install KinD
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
+      run: |
+        curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ env.KIND_VERSION }}/kind-linux-amd64
+        chmod +x ./kind
+        mv ./kind ~/.local/bin/kind
+    - name: Install Helmfile
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
+      run: |
+        wget https://github.com/helmfile/helmfile/releases/download/${{ env.HELMFILE_VERSION }}/helmfile_$(echo ${{ env.HELMFILE_VERSION }} | sed 's/v//')_linux_amd64.tar.gz
+        tar -zxvf helmfile_$(echo ${{ env.HELMFILE_VERSION }} | sed 's/v//')_linux_amd64.tar.gz
+        chmod +x helmfile
+        mv helmfile ~/.local/bin/
+    - name: Install kustomize
+      if: steps.cache-binaries.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${{ env.KUSTOMIZE_VERSION }}/kustomize_${{ env.KUSTOMIZE_VERSION }}_linux_amd64.tar.gz -o kustomize.tar.gz
+        tar -zxvf kustomize.tar.gz
+        chmod +x kustomize
+        mv kustomize ~/.local/bin/
+    - name: Verify binary versions
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "PATH: $PATH"
+        echo "HOME: $HOME"
+        helm version
+        kubectl version --client
+        kind version
+        helmfile version
+        kustomize version
+    - name: Setup kind cluster
+      run: |
+        kind create cluster --name tazuna --config .github/kind-config.yaml
+        kubectl cluster-info --context kind-tazuna
+    - name: Build Tazuna binary
+      run: go build .
+    - name: E2E Tests
+      run: go test -v -tags=e2e -count=1 ./test/e2e/...
+      env:
+        KUBERNETES_SERVICE_HOST: ""
+        KUBERNETES_SERVICE_PORT: ""

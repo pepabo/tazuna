@@ -1,0 +1,7 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - description: "manifest that should be rejected by check because name is not set"
+      type: kustomize
+      path: ./does-not-matter

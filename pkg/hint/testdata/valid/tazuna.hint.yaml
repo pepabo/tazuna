@@ -1,0 +1,24 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: TazunaHint
+vars:
+  clusterName:
+    type: string
+    required: true
+    description: "Cluster name"
+  environment:
+    type: string
+    required: false
+    default: "production"
+    description: "Environment name"
+  extraLabels:
+    type: map
+    required: false
+    description: "Additional labels"
+  nodeSelectors:
+    type: slice
+    required: false
+    description: "Node selectors"
+  optionalString:
+    type: string
+    required: false
+    description: "Optional string (no default)"

@@ -1,0 +1,4 @@
+apiVersion: v2
+name: simple-chart
+description: A minimal chart for E2E testing
+version: 0.1.0

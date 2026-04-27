@@ -1,0 +1,4 @@
+apiVersion: v2
+name: mylocalchart
+description: A tiny local chart
+version: 0.1.0

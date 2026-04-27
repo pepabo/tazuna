@@ -1,0 +1,10 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "destroy-minimal-nginx"
+      description: "ADR005 Phase 2 e2e: fixture for the minimal apply -> destroy scenario of tazuna destroy"
+      type: kustomize
+      path: ./kustomize
+      tags:
+        - destroy-minimal
