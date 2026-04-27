@@ -33,7 +33,7 @@ replace (
 
 require (
 	github.com/cockroachdb/errors v1.12.0
-	github.com/google/cel-go v0.27.0
+	github.com/google/cel-go v0.28.0
 	github.com/helmfile/helmfile v1.2.0
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
