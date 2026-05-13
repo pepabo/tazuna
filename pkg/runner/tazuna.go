@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"io"
 	"log/slog"
 	"path/filepath"
 
@@ -31,6 +32,10 @@ func NewTazunaRunner(
 	k8sClient client.Client,
 	opClient op.Client,
 	opts ...RunnerOption) *TazunaRunner {
+	// nilロガーで生成された場合のpanicを避けるため、ログを破棄するロガーへフォールバックする
+	if logger == nil {
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	r := TazunaRunner{
 		logger:    logger,
 		k8sClient: k8sClient,
