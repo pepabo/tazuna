@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 
 	"github.com/cockroachdb/errors"
@@ -43,7 +45,8 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		r := runner.NewTazunaRunner(nil, nil, nil)
+		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+		r := runner.NewTazunaRunner(logger, nil, nil)
 
 		tags, err := r.ListTags(cmd.Context(), &tazuna, path)
 		if err != nil {
