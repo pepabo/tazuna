@@ -104,6 +104,7 @@ jobs:
     env:
       HELM_VERSION: v3.17.0
       KIND_VERSION: v0.31.0
+      KIND_NODE_IMAGE: kindest/node:v1.32.0
       HELMFILE_VERSION: v1.4.4
       KUSTOMIZE_VERSION: v5.8.1
     steps:
@@ -194,9 +195,23 @@ jobs:
         kind version
         helmfile version
         kustomize version
+    - name: Cache kind node image
+      id: cache-kind-node
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      with:
+        path: /tmp/kind-node-image.tar
+        key: kind-node-${{ runner.os }}-${{ env.KIND_NODE_IMAGE }}
+    - name: Pull kind node image
+      if: steps.cache-kind-node.outputs.cache-hit != 'true'
+      run: |
+        docker pull "${KIND_NODE_IMAGE}"
+        docker save "${KIND_NODE_IMAGE}" -o /tmp/kind-node-image.tar
+    - name: Load kind node image
+      if: steps.cache-kind-node.outputs.cache-hit == 'true'
+      run: docker load -i /tmp/kind-node-image.tar
     - name: Setup kind cluster
       run: |
-        kind create cluster --name tazuna --config .github/kind-config.yaml
+        kind create cluster --name tazuna --image "${KIND_NODE_IMAGE}" --config .github/kind-config.yaml
         kubectl cluster-info --context kind-tazuna
     - name: Build Tazuna binary
       run: go build .
