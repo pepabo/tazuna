@@ -95,7 +95,7 @@ jobs:
       with:
         version: v3.17.0
     - name: Integration Tests
-      run: go test -v -tags=integration ./...
+      run: go test -tags=integration ./...
 
   e2e:
     name: E2E Tests
@@ -201,7 +201,7 @@ jobs:
     - name: Build Tazuna binary
       run: go build .
     - name: E2E Tests
-      run: go test -v -tags=e2e -count=1 ./test/e2e/...
+      run: go test -tags=e2e -count=1 ./test/e2e/...
       env:
         KUBERNETES_SERVICE_HOST: ""
         KUBERNETES_SERVICE_PORT: ""
