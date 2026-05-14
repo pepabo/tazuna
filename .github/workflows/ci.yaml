@@ -35,10 +35,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: test
       run: go test ./...
     - name: build
@@ -64,10 +64,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: Cache golangci-lint
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
@@ -104,10 +104,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: Install Helm # helmfile managerのintegrationテストにhelmが必要
       uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       with:
@@ -143,10 +143,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: Set up home directory and PATH
       run: |
         if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
