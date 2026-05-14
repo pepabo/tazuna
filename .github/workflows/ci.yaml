@@ -29,11 +29,16 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: test
       run: go test ./...
     - name: build
@@ -53,16 +58,24 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Cache golangci-lint
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.golangci-lint-cache
-        key: ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-golangci-lint-
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
       with:
@@ -85,11 +98,16 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Install Helm # helmfile managerのintegrationテストにhelmが必要
       uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       with:
@@ -119,11 +137,16 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Set up home directory and PATH
       run: |
         if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
