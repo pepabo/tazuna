@@ -3,7 +3,19 @@ name: CI
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - ".gitignore"
+      - ".tagpr"
+      - "CHANGELOG.md"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "LICENSE"
+      - ".gitignore"
+      - ".tagpr"
+      - "CHANGELOG.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,11 +41,16 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: test
       run: go test ./...
     - name: build
@@ -53,16 +70,24 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: Cache golangci-lint
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.golangci-lint-cache
-        key: ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-golangci-lint-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-golangci-lint-
     - name: Install golangci-lint
       uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
       with:
@@ -85,17 +110,22 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: Install Helm # helmfile managerのintegrationテストにhelmが必要
       uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
       with:
         version: v3.17.0
     - name: Integration Tests
-      run: go test -v -tags=integration ./...
+      run: go test -tags=integration ./...
 
   e2e:
     name: E2E Tests
@@ -104,6 +134,7 @@ jobs:
     env:
       HELM_VERSION: v3.17.0
       KIND_VERSION: v0.31.0
+      KIND_NODE_IMAGE: kindest/node:v1.32.0
       HELMFILE_VERSION: v1.4.4
       KUSTOMIZE_VERSION: v5.8.1
     steps:
@@ -118,11 +149,16 @@ jobs:
       with:
         path: ${{ github.workspace }}/.go/pkg/mod
         key: ${{ runner.os }}-${{ runner.arch }}-go-mod-${{ hashFiles('go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-go-mod-
     - name: Cache Go build
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: Set up home directory and PATH
       run: |
         if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
@@ -194,14 +230,18 @@ jobs:
         kind version
         helmfile version
         kustomize version
-    - name: Setup kind cluster
+    - name: Setup kind cluster and build binary
       run: |
-        kind create cluster --name tazuna --config .github/kind-config.yaml
+        # Build the tazuna binary in parallel with kind cluster setup.
+        # kind create cluster waits for k8s control plane (~16s) and
+        # go build takes ~17s — running both at once saves ~17s.
+        go build . &
+        BUILD_PID=$!
+        kind create cluster --name tazuna --image "${KIND_NODE_IMAGE}" --config .github/kind-config.yaml
         kubectl cluster-info --context kind-tazuna
-    - name: Build Tazuna binary
-      run: go build .
+        wait "${BUILD_PID}"
     - name: E2E Tests
-      run: go test -v -tags=e2e -count=1 ./test/e2e/...
+      run: go test -tags=e2e -count=1 ./test/e2e/...
       env:
         KUBERNETES_SERVICE_HOST: ""
         KUBERNETES_SERVICE_PORT: ""
