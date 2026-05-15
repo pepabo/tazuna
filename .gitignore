@@ -1,3 +1,27 @@
+# Build artifacts
 tazuna
+dist/
+
+# Test / coverage artifacts
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Claude Code local files
 .claude/
 CLAUDE.md
