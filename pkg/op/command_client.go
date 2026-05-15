@@ -19,7 +19,7 @@ func (c *CommandClient) GetVault(ctx context.Context, vaultName string) (Vault, 
 		WithJSONFormat().
 		Build()
 
-	out, err := exec.Command(cmds[0], cmds[1:]...).Output()
+	out, err := exec.CommandContext(ctx, cmds[0], cmds[1:]...).Output()
 	if err != nil {
 		return Vault{}, err
 	}
@@ -45,7 +45,7 @@ func (c *CommandClient) GetVaultItem(ctx context.Context, vaultName string, item
 		WithJSONFormat().
 		Build()
 
-	out, err := exec.Command(cmds[0], cmds[1:]...).Output()
+	out, err := exec.CommandContext(ctx, cmds[0], cmds[1:]...).Output()
 	if err != nil {
 		return Item{}, err
 	}
@@ -69,7 +69,7 @@ func (c *CommandClient) ListVaultItems(ctx context.Context, vaultName string) ([
 		WithJSONFormat().
 		Build()
 
-	out, err := exec.Command(cmds[0], cmds[1:]...).Output()
+	out, err := exec.CommandContext(ctx, cmds[0], cmds[1:]...).Output()
 	if err != nil {
 		return nil, err
 	}
