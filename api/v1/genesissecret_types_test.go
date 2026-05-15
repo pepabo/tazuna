@@ -98,13 +98,3 @@ func TestGenesisSecretOutput_StdoutOnly(t *testing.T) {
 	}
 }
 
-func TestGenesisSecret_Kind(t *testing.T) {
-	t.Parallel()
-	gs := GenesisSecret{}
-	if gs.GetKind() != "GenesisSecret" {
-		t.Errorf("GetKind = %q", gs.GetKind())
-	}
-	if gs.GetName() != "" {
-		t.Errorf("GetName = %q, want empty", gs.GetName())
-	}
-}

@@ -38,10 +38,3 @@ type GenesisSecretOutputKubernetesSecret struct {
 	// corev1.SecretType を指定する
 	Type string `yaml:"type"`
 }
-
-func (GenesisSecret) GetKind() string {
-	return "GenesisSecret"
-}
-func (GenesisSecret) GetName() string {
-	return ""
-}
