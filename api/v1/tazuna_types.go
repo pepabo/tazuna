@@ -1,7 +1,20 @@
 package v1
 
+const (
+	// TazunaAPIVersion は Tazuna リソースが取りうる apiVersion の正規値です。
+	TazunaAPIVersion = "tazuna.pepabo.com/v1"
+	// TazunaKind は Tazuna リソースが取りうる kind の正規値です。
+	TazunaKind = "Tazuna"
+)
+
 // Tazuna はtazuna applyの挙動を制御するルートリソースです
 type Tazuna struct {
+	// APIVersion は Kubernetes manifest と同形式の TypeMeta フィールドです。
+	// 設定する場合は TazunaAPIVersion と一致している必要があります。
+	APIVersion string `yaml:"apiVersion,omitempty"`
+	// Kind は Kubernetes manifest と同形式の TypeMeta フィールドです。
+	// 設定する場合は TazunaKind と一致している必要があります。
+	Kind string     `yaml:"kind,omitempty"`
 	Spec TazunaSpec `yaml:"spec"`
 }
 
