@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,7 @@ func TestBuildUnstructuredFromStateKey_InvalidKey(t *testing.T) {
 func TestGetGitCommitHash(t *testing.T) {
 	t.Parallel()
 
-	hash := getGitCommitHash()
+	hash := getGitCommitHash(context.Background())
 	// gitリポジトリ内で実行されている場合、40文字のhex文字列が返る
 	if hash != "" {
 		assert.Len(t, hash, 40)
