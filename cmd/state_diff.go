@@ -65,7 +65,7 @@ Examples:
 		}
 		defer func() {
 			if cerr := f.Close(); cerr != nil {
-				err = errors.WithStack(cerr)
+				err = errors.Join(err, errors.WithStack(cerr))
 			}
 		}()
 
