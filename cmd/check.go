@@ -2,10 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -66,7 +66,22 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+		logLevelS, err := cmd.Flags().GetString("log-level")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		var logLevel slog.Level
+		switch strings.ToLower(logLevelS) {
+		case "debug":
+			logLevel = slog.LevelDebug
+		case "warn":
+			logLevel = slog.LevelWarn
+		case "error":
+			logLevel = slog.LevelError
+		default:
+			logLevel = slog.LevelInfo
+		}
+		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 		r := runner.NewTazunaRunner(logger, nil, nil)
 
 		if fix {
