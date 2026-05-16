@@ -13,10 +13,12 @@ import (
 func TestPrintTagsFiltered_NoFilter(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	printTagsFiltered(&buf, map[string][]string{
+	if err := printTagsFiltered(&buf, map[string][]string{
 		"frontend": {"web"},
 		"backend":  {"api"},
-	}, nil)
+	}, nil); err != nil {
+		t.Fatalf("printTagsFiltered: %v", err)
+	}
 	got := buf.String()
 	// keys are sorted, so backend appears before frontend
 	if !strings.HasPrefix(got, "backend:\n- api\nfrontend:\n- web\n") {
@@ -27,11 +29,13 @@ func TestPrintTagsFiltered_NoFilter(t *testing.T) {
 func TestPrintTagsFiltered_WithFilter(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
-	printTagsFiltered(&buf, map[string][]string{
+	if err := printTagsFiltered(&buf, map[string][]string{
 		"frontend": {"web"},
 		"backend":  {"api"},
 		"infra":    {"vpc"},
-	}, []string{"frontend", "infra", "unknown"})
+	}, []string{"frontend", "infra", "unknown"}); err != nil {
+		t.Fatalf("printTagsFiltered: %v", err)
+	}
 	got := buf.String()
 	if strings.Contains(got, "backend") {
 		t.Errorf("filter leaked backend: %s", got)
