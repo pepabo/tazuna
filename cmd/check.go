@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/cockroachdb/errors"
-	v1 "github.com/pepabo/tazuna/api/v1"
+	"github.com/pepabo/tazuna/cmd/internal/cliutil"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/pepabo/tazuna/pkg/validator"
 	"github.com/spf13/cobra"
@@ -32,7 +30,7 @@ tazuna.yaml is written back.
 Examples:
   tazuna check -f tazuna.yaml
   tazuna check -f tazuna.yaml --fix`,
-	RunE: func(cmd *cobra.Command, args []string) (err error) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
@@ -42,19 +40,9 @@ Examples:
 			return errors.WithStack(err)
 		}
 
-		f, err := os.Open(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path)
 		if err != nil {
-			return errors.WithStack(err)
-		}
-		defer func() {
-			if cerr := f.Close(); cerr != nil {
-				err = errors.Join(err, errors.WithStack(cerr))
-			}
-		}()
-
-		tazuna := v1.Tazuna{}
-		if err := yaml.NewDecoder(f).Decode(&tazuna); err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 
 		absPath, err := filepath.Abs(path)
@@ -62,34 +50,22 @@ Examples:
 			return errors.WithStack(err)
 		}
 
-		if err := validator.ValidateTazunaWithBasePath(&tazuna, filepath.Dir(absPath)); err != nil {
+		if err := validator.ValidateTazunaWithBasePath(tazuna, filepath.Dir(absPath)); err != nil {
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		logLevelS, err := cmd.Flags().GetString("log-level")
+		logger, err := cliutil.NewLogger(cmd)
 		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
-		var logLevel slog.Level
-		switch strings.ToLower(logLevelS) {
-		case "debug":
-			logLevel = slog.LevelDebug
-		case "warn":
-			logLevel = slog.LevelWarn
-		case "error":
-			logLevel = slog.LevelError
-		default:
-			logLevel = slog.LevelInfo
-		}
-		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 		r := runner.NewTazunaRunner(logger, nil, nil)
 
 		if fix {
-			if err := r.CheckAndFix(cmd.Context(), &tazuna, absPath); err != nil {
+			if err := r.CheckAndFix(cmd.Context(), tazuna, absPath); err != nil {
 				return errors.Wrapf(err, "check --fix failed for tazuna.yaml at %s", path)
 			}
 
-			out, err := yaml.Marshal(&tazuna)
+			out, err := yaml.Marshal(tazuna)
 			if err != nil {
 				return errors.WithStack(err)
 			}
@@ -101,7 +77,7 @@ Examples:
 			return nil
 		}
 
-		if err := r.Check(cmd.Context(), &tazuna, absPath); err != nil {
+		if err := r.Check(cmd.Context(), tazuna, absPath); err != nil {
 			return errors.Wrapf(err, "check failed for tazuna.yaml at %s", path)
 		}
 
