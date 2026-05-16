@@ -292,8 +292,14 @@ func itemCreateCommandsFromItems(
 	vaultName string,
 	dryRun bool,
 ) ([]*exec.Cmd, error) {
+	if err := op.ValidateIdentifier("vault", vaultName); err != nil {
+		return nil, errors.WithStack(err)
+	}
 	commands := []*exec.Cmd{}
 	for _, item := range items {
+		if err := op.ValidateIdentifier("item", item.Title); err != nil {
+			return nil, errors.WithStack(err)
+		}
 		category := op.VaultItemCategoryAPICredential
 		itemCreateCommand := op.NewCommandBuilder().
 			WithItem(
