@@ -10,7 +10,7 @@ import (
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/pepabo/tazuna/pkg/validator"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 var checkCmd = &cobra.Command{

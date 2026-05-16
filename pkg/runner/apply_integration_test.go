@@ -13,9 +13,9 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -28,16 +28,11 @@ func TestApplyToCluster_OK(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	r := runner.NewTazunaRunner(logger, client, nil)
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	baseDir := filepath.Dir(path)
@@ -67,16 +62,11 @@ func TestApplyToCluster_WithTags(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	r := runner.NewTazunaRunner(logger, client, nil, runner.WithTags([]string{"kustomize1"}))
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	baseDir := filepath.Dir(path)
@@ -106,16 +96,11 @@ func TestApply_WithIncludes(t *testing.T) {
 	client := fake.NewClientBuilder().Build()
 	r := runner.NewTazunaRunner(logger, client, nil)
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	// 元のマニフェスト数を確認（includeマニフェストが1つ）

@@ -42,7 +42,6 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.28.0
-	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.0
 	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.36.0
@@ -380,6 +379,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.21.0 // indirect
 	helm.sh/helm/v4 v4.1.4 // indirect
 	k8s.io/apiextensions-apiserver v0.36.0 // indirect

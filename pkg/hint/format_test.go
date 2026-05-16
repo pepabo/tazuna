@@ -8,7 +8,7 @@ import (
 	"github.com/pepabo/tazuna/pkg/hint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 func TestFormatHuman(t *testing.T) {
@@ -157,5 +157,5 @@ func TestFormatJSON(t *testing.T) {
 	var parsed map[string]any
 	err = json.Unmarshal([]byte(out), &parsed)
 	require.NoError(t, err)
-	assert.Equal(t, "tazuna.pepabo.com/v1", parsed["APIVersion"])
+	assert.Equal(t, "tazuna.pepabo.com/v1", parsed["apiVersion"])
 }

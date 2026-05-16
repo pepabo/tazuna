@@ -3,7 +3,7 @@ package v1
 import (
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 func TestManifestORAS_RoundTrip_Tag(t *testing.T) {

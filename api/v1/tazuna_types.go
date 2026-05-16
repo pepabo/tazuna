@@ -11,11 +11,11 @@ const (
 type Tazuna struct {
 	// APIVersion は Kubernetes manifest と同形式の TypeMeta フィールドです。
 	// 設定する場合は TazunaAPIVersion と一致している必要があります。
-	APIVersion string `yaml:"apiVersion,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
 	// Kind は Kubernetes manifest と同形式の TypeMeta フィールドです。
 	// 設定する場合は TazunaKind と一致している必要があります。
-	Kind string     `yaml:"kind,omitempty"`
-	Spec TazunaSpec `yaml:"spec"`
+	Kind string     `json:"kind,omitempty"`
+	Spec TazunaSpec `json:"spec"`
 }
 
 // ContextMatchMode はcontext_matchesの評価モードを定義します
@@ -31,46 +31,46 @@ const (
 type TazunaSpec struct {
 	// ContextMatchesは現在のkubeconfigコンテキスト名がマッチすべき正規表現パターンのリストです
 	// 指定した場合、apply/destroy時にコンテキスト名がパターンにマッチしないとエラーになります
-	ContextMatches []string `yaml:"context_matches,omitempty"`
+	ContextMatches []string `json:"context_matches,omitempty"`
 	// ContextMatchModeはcontext_matchesの評価モードです（"or" または "and"、デフォルトは "or"）
-	ContextMatchMode ContextMatchMode `yaml:"context_match_mode,omitempty"`
-	Manifests        []Manifest       `yaml:"manifests"`
+	ContextMatchMode ContextMatchMode `json:"context_match_mode,omitempty"`
+	Manifests        []Manifest       `json:"manifests"`
 	// Testsはすべてのマニフェスト適用が終わったあとに実行されます
-	Tests []TestPluginSpec `yaml:"tests"`
+	Tests []TestPluginSpec `json:"tests"`
 }
 
 // IncludeFile はincludeするファイルを定義します
 type IncludeFile struct {
 	// Path はincludeするファイルのパス（tazuna.yamlからの相対パス）
-	Path string `yaml:"path"`
+	Path string `json:"path"`
 }
 
 // Manifest はtazunaのマニフェスト管理方式を定義します
 type Manifest struct {
-	Name        string `yaml:"name,omitempty"`        // マニフェストの名前
-	Description string `yaml:"description,omitempty"` // マニフェストの説明
+	Name        string `json:"name,omitempty"`        // マニフェストの名前
+	Description string `json:"description,omitempty"` // マニフェストの説明
 
 	// Includes はincludeするファイルのリストを指定します
 	// includesが指定された場合、他のフィールド（Type, Path, Tags など）は無視されます
-	Includes []IncludeFile `yaml:"includes,omitempty"`
+	Includes []IncludeFile `json:"includes,omitempty"`
 
 	// Path はマニフェストのパスを指定します
 	// GenesisSecretの場合はGenesisSecretのリソースマニフェストのパス
 	// Kustomizeの場合はkustomization.yamlがあるディレクトリ
 	// Helmfileの場合はhelmfile.yamlがあるディレクトリ
-	Path string       `yaml:"path"`
-	Type ManifestType `yaml:"type"`
+	Path string       `json:"path"`
+	Type ManifestType `json:"type"`
 	// Tagsはマニフェストに付与するタグを指定します
 	// タグはマニフェストの選択に利用できます
 	// 例えば、`tazuna apply --tags foo,bar`とすると、fooとbarのタグが付与されたマニフェストのみが適用されます
-	Tags          []string               `yaml:"tags,omitempty"`
-	Kustomize     *ManifestKustomize     `yaml:"kustomize,omitempty"`
-	GenesisSecret *ManifestGenesisSecret `yaml:"genesisSecret,omitempty"`
-	Helmfile      *ManifestHelmfile      `yaml:"helmfile,omitempty"`
-	Parallel      *ManifestParallel      `yaml:"parallel,omitempty"`
-	ORAS          *ManifestORAS          `yaml:"oras,omitempty"`
+	Tags          []string               `json:"tags,omitempty"`
+	Kustomize     *ManifestKustomize     `json:"kustomize,omitempty"`
+	GenesisSecret *ManifestGenesisSecret `json:"genesisSecret,omitempty"`
+	Helmfile      *ManifestHelmfile      `json:"helmfile,omitempty"`
+	Parallel      *ManifestParallel      `json:"parallel,omitempty"`
+	ORAS          *ManifestORAS          `json:"oras,omitempty"`
 	// Testsはマニフェストapply後に行われる各種テストを記載します
-	Tests []TestPluginSpec `yaml:"tests"`
+	Tests []TestPluginSpec `json:"tests"`
 }
 
 type ManifestType string
@@ -84,18 +84,18 @@ const (
 )
 
 type ManifestKustomize struct {
-	DefaultNamespace string `yaml:"defaultNamespace,omitempty"` // kustomize assetsのデフォルトネームスペース
+	DefaultNamespace string `json:"defaultNamespace,omitempty"` // kustomize assetsのデフォルトネームスペース
 }
 
 type ManifestGenesisSecret struct{}
 type ManifestHelmfile struct {
-	IncludeCRDs      bool                   `yaml:"includeCRDs"`
-	Vars             map[string]HelmFileVar `yaml:"vars,omitempty"`
-	DefaultNamespace string                 `yaml:"defaultNamespace,omitempty"` // helmfile assetsのデフォルトネームスペース
-	ExtraValueFiles  []string               `yaml:"extraValueFiles,omitempty"`  // 追加のvalue filesを指定
-	Wait             bool                   `yaml:"wait,omitempty"`             // helmfile syncに--waitオプションを渡す
-	TimeoutSeconds   int                    `yaml:"timeoutSeconds,omitempty"`   // リソースのReady待機のタイムアウト秒数
-	KubeVersion      string                 `yaml:"kubeVersion,omitempty"`      // helm templateに渡す--kube-versionの値
+	IncludeCRDs      bool                   `json:"includeCRDs"`
+	Vars             map[string]HelmFileVar `json:"vars,omitempty"`
+	DefaultNamespace string                 `json:"defaultNamespace,omitempty"` // helmfile assetsのデフォルトネームスペース
+	ExtraValueFiles  []string               `json:"extraValueFiles,omitempty"`  // 追加のvalue filesを指定
+	Wait             bool                   `json:"wait,omitempty"`             // helmfile syncに--waitオプションを渡す
+	TimeoutSeconds   int                    `json:"timeoutSeconds,omitempty"`   // リソースのReady待機のタイムアウト秒数
+	KubeVersion      string                 `json:"kubeVersion,omitempty"`      // helm templateに渡す--kube-versionの値
 }
 
 func DefaultHelmfile() *ManifestHelmfile {
@@ -117,22 +117,22 @@ const (
 type HelmFileVar struct {
 	// Fromはどこからhelmfile varの値を取得するかを指定します。
 	// 現状は `env` と `op`, `static` をサポートしています
-	From        string                    `yaml:"from,omitempty"`
-	Op          *OnePasswordVaultSelector `yaml:"op,omitempty"`
-	Static      *string                   `yaml:"static,omitempty"`      // staticな値を指定する
-	StaticSlice []string                  `yaml:"staticSlice,omitempty"` // staticなslice値を指定する
-	StaticMap   map[string]string         `yaml:"staticMap,omitempty"`   // staticなmap値を指定する
-	Env         *string                   `yaml:"env,omitempty"`         // 環境変数から値を取得する
+	From        string                    `json:"from,omitempty"`
+	Op          *OnePasswordVaultSelector `json:"op,omitempty"`
+	Static      *string                   `json:"static,omitempty"`      // staticな値を指定する
+	StaticSlice []string                  `json:"staticSlice,omitempty"` // staticなslice値を指定する
+	StaticMap   map[string]string         `json:"staticMap,omitempty"`   // staticなmap値を指定する
+	Env         *string                   `json:"env,omitempty"`         // 環境変数から値を取得する
 }
 
 type OnePasswordVaultSelector struct {
-	Key   string `yaml:"key"`   // 1PasswordのFieldをIDかLabelのどちらから取ってくるか
-	Vault string `yaml:"vault"` // 1PasswordのVault名
-	Item  string `yaml:"item"`  // 1PasswordのItem名
-	Field string `yaml:"field"` // 1PasswordのField名
+	Key   string `json:"key"`   // 1PasswordのFieldをIDかLabelのどちらから取ってくるか
+	Vault string `json:"vault"` // 1PasswordのVault名
+	Item  string `json:"item"`  // 1PasswordのItem名
+	Field string `json:"field"` // 1PasswordのField名
 }
 
 type ManifestParallel struct {
 	// Childrenはマニフェストの子マニフェストを定義します
-	Children []Manifest `yaml:"children,omitempty"`
+	Children []Manifest `json:"children,omitempty"`
 }
