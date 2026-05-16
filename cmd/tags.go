@@ -47,14 +47,13 @@ Examples:
 		}
 
 		filter := getTags(cmd)
-		printTagsFiltered(cmd.OutOrStdout(), tags, filter)
-		return nil
+		return printTagsFiltered(cmd.OutOrStdout(), tags, filter)
 	},
 }
 
 // printTagsFiltered writes the tag→names map to w. When filter is non-empty,
 // only the listed tag names are emitted; output is sorted for determinism.
-func printTagsFiltered(w io.Writer, tags map[string][]string, filter []string) {
+func printTagsFiltered(w io.Writer, tags map[string][]string, filter []string) error {
 	want := tags
 	if len(filter) > 0 {
 		want = make(map[string][]string, len(filter))
@@ -70,11 +69,16 @@ func printTagsFiltered(w io.Writer, tags map[string][]string, filter []string) {
 	}
 	sort.Strings(keys)
 	for _, tag := range keys {
-		fmt.Fprintf(w, "%s:\n", tag)
+		if _, err := fmt.Fprintf(w, "%s:\n", tag); err != nil {
+			return errors.WithStack(err)
+		}
 		for _, name := range want[tag] {
-			fmt.Fprintf(w, "- %s\n", name)
+			if _, err := fmt.Fprintf(w, "- %s\n", name); err != nil {
+				return errors.WithStack(err)
+			}
 		}
 	}
+	return nil
 }
 
 func init() {
