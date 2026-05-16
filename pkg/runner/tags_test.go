@@ -8,7 +8,7 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 // `tazuna tags` 実行時に nil logger で生成された Runner が
@@ -18,16 +18,11 @@ func TestListTags_NilLogger_WithIncludes(t *testing.T) {
 	path := "testdata/include/tazuna.yaml"
 	r := runner.NewTazunaRunner(nil, nil, nil)
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	tags, err := r.ListTags(context.Background(), &tazuna, path)

@@ -38,7 +38,6 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringP("kustomize", "k", "", "Process kustomize directory")
 	rootCmd.PersistentFlags().StringP("file-path", "f", "tazuna.yaml", "Path to tazuna.yaml")
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "log level(debug/info/warn/error)")
 }

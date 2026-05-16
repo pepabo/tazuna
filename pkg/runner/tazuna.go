@@ -85,11 +85,21 @@ func setupTestPlugins(k8sClient client.Client) map[string]testplugin.Plugin {
 	return m
 }
 
+// ConvertManifestPathFromCwd は tazuna.yaml からの相対パスを cwd 起点のパスに
+// 書き換えます。呼び出し元の Manifests スライスを破壊しないよう、専用の
+// バッキング配列にコピーしてから書き換えます。Apply 等が Tazuna を値で受け取って
+// いてもスライスヘッダはバッキング配列を共有するため、コピーしないと同じ
+// Tazuna を二度渡すと baseDir が二重に prefix される問題が起きます。
 func (t *TazunaRunner) ConvertManifestPathFromCwd(baseDir string, tazuna *v1.Tazuna) {
-	for mi := range tazuna.Spec.Manifests {
-		manifestPathFromCwd := filepath.Join(baseDir, tazuna.Spec.Manifests[mi].Path)
-		tazuna.Spec.Manifests[mi].Path = manifestPathFromCwd
+	if len(tazuna.Spec.Manifests) == 0 {
+		return
 	}
+	copied := make([]v1.Manifest, len(tazuna.Spec.Manifests))
+	copy(copied, tazuna.Spec.Manifests)
+	for mi := range copied {
+		copied[mi].Path = filepath.Join(baseDir, copied[mi].Path)
+	}
+	tazuna.Spec.Manifests = copied
 }
 
 func WithTags(tags []string) RunnerOption {

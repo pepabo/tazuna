@@ -13,8 +13,8 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/yaml"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,16 +39,11 @@ func TestDestroyResourcesOnCluster_OK(t *testing.T) {
 
 	r := runner.NewTazunaRunner(logger, client, nil)
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	baseDir := filepath.Dir(path)
@@ -109,16 +104,11 @@ func TestDestroyResourcesOnCluster_WithTags(t *testing.T) {
 	// Create runner with tag filter - only "kustomize1" tagged manifests should be processed
 	r := runner.NewTazunaRunner(logger, client, nil, runner.WithTags([]string{"kustomize1"}))
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	baseDir := filepath.Dir(path)
@@ -161,16 +151,11 @@ func TestDestroyResourcesOnCluster_WithNonMatchingTags(t *testing.T) {
 	// Create runner with non-matching tag filter
 	r := runner.NewTazunaRunner(logger, client, nil, runner.WithTags([]string{"nonexistent-tag"}))
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	baseDir := filepath.Dir(path)
@@ -206,16 +191,11 @@ func TestDestroyResourcesOnCluster_WithNoTagsSpecified(t *testing.T) {
 	// Create runner with no tag filter (empty tags)
 	r := runner.NewTazunaRunner(logger, client, nil, runner.WithTags([]string{}))
 
-	f, err := os.Open(path)
+	data, err := os.ReadFile(path)
 	assert.NoError(t, err)
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			assert.NoError(t, cerr)
-		}
-	}()
 
 	tazuna := v1.Tazuna{}
-	err = yaml.NewDecoder(f).Decode(&tazuna)
+	err = yaml.Unmarshal(data, &tazuna)
 	assert.NoError(t, err)
 
 	baseDir := filepath.Dir(path)

@@ -48,38 +48,38 @@ const (
 // MergeVarsWithHintの実行時に、個別varの検証後に評価されます。
 type HintRule struct {
 	// Type はルールの種別です。現在は "oneof_required" のみ対応。
-	Type HintRuleType `yaml:"type" json:"type"`
+	Type HintRuleType `json:"type"`
 	// Vars はルールの対象となるvar名のリストです。2件以上が必要です。
-	Vars []string `yaml:"vars" json:"vars"`
+	Vars []string `json:"vars"`
 	// Message はバリデーションエラー時に表示するカスタムメッセージです。
-	Message string `yaml:"message,omitempty" json:"message,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // TazunaHint はtazuna.hint.yamlのルートリソースです
 type TazunaHint struct {
-	APIVersion string             `yaml:"apiVersion" json:"APIVersion"`
-	Kind       string             `yaml:"kind" json:"Kind"`
-	Vars       map[string]HintVar `yaml:"vars" json:"Vars"`
+	APIVersion string             `json:"apiVersion"`
+	Kind       string             `json:"kind"`
+	Vars       map[string]HintVar `json:"vars"`
 	// Rules はvar横断のトップレベルバリデーションルールです。
-	Rules []HintRule `yaml:"rules,omitempty" json:"Rules,omitempty"`
+	Rules []HintRule `json:"rules,omitempty"`
 }
 
 // HintVar はhint varsの定義です
 type HintVar struct {
-	Type        HintVarType `yaml:"type" json:"type"`
-	Required    bool        `yaml:"required" json:"required"`
-	Default     any         `yaml:"default,omitempty" json:"default,omitempty"`
-	Description string      `yaml:"description,omitempty" json:"description,omitempty"`
+	Type        HintVarType `json:"type"`
+	Required    bool        `json:"required"`
+	Default     any         `json:"default,omitempty"`
+	Description string      `json:"description,omitempty"`
 	// Format はstring型varに対するフォーマット検証ルールです。
 	// string型以外のvarに指定するとValidateHintでエラーになります。
 	// 値が空文字列（ゼロ値注入を含む）の場合、検証はスキップされます。
-	Format HintFormat `yaml:"format,omitempty" json:"format,omitempty"`
+	Format HintFormat `json:"format,omitempty"`
 	// RequiredWith は、指定されたvarのいずれかがユーザーから提供された場合に、
 	// このvarも必須になることを示します。
 	// required:trueとの併用は矛盾するためValidateHintでエラーになります。
-	RequiredWith []string `yaml:"required_with,omitempty" json:"required_with,omitempty"`
+	RequiredWith []string `json:"required_with,omitempty"`
 	// RequiredWithout は、指定されたvarが全てユーザーから未提供の場合に、
 	// このvarが必須になることを示します。
 	// required:trueとの併用は矛盾するためValidateHintでエラーになります。
-	RequiredWithout []string `yaml:"required_without,omitempty" json:"required_without,omitempty"`
+	RequiredWithout []string `json:"required_without,omitempty"`
 }

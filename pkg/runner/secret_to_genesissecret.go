@@ -17,9 +17,9 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // SecretToGenesisSecret は、KubernetesのSecretを1Passwordに保存し、
@@ -292,8 +292,14 @@ func itemCreateCommandsFromItems(
 	vaultName string,
 	dryRun bool,
 ) ([]*exec.Cmd, error) {
+	if err := op.ValidateIdentifier("vault", vaultName); err != nil {
+		return nil, errors.WithStack(err)
+	}
 	commands := []*exec.Cmd{}
 	for _, item := range items {
+		if err := op.ValidateIdentifier("item", item.Title); err != nil {
+			return nil, errors.WithStack(err)
+		}
 		category := op.VaultItemCategoryAPICredential
 		itemCreateCommand := op.NewCommandBuilder().
 			WithItem(

@@ -529,6 +529,89 @@ func TestValidateTazunaSpec_ContextMatches(t *testing.T) {
 	}
 }
 
+func TestValidateTazunaTypeMeta(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		tazuna    *v1.Tazuna
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name:      "both fields empty (backward compat)",
+			tazuna:    &v1.Tazuna{},
+			expectErr: false,
+		},
+		{
+			name: "both fields set to expected values",
+			tazuna: &v1.Tazuna{
+				APIVersion: v1.TazunaAPIVersion,
+				Kind:       v1.TazunaKind,
+			},
+			expectErr: false,
+		},
+		{
+			name: "only apiVersion set and correct",
+			tazuna: &v1.Tazuna{
+				APIVersion: v1.TazunaAPIVersion,
+			},
+			expectErr: false,
+		},
+		{
+			name: "only kind set and correct",
+			tazuna: &v1.Tazuna{
+				Kind: v1.TazunaKind,
+			},
+			expectErr: false,
+		},
+		{
+			name: "apiVersion wrong",
+			tazuna: &v1.Tazuna{
+				APIVersion: "totally.wrong/v999",
+				Kind:       v1.TazunaKind,
+			},
+			expectErr: true,
+			errMsg:    "apiVersion must be",
+		},
+		{
+			name: "kind wrong",
+			tazuna: &v1.Tazuna{
+				APIVersion: v1.TazunaAPIVersion,
+				Kind:       "NotTazuna",
+			},
+			expectErr: true,
+			errMsg:    "kind must be",
+		},
+		{
+			name: "both wrong - apiVersion reported first",
+			tazuna: &v1.Tazuna{
+				APIVersion: "totally.wrong/v999",
+				Kind:       "NotTazuna",
+			},
+			expectErr: true,
+			errMsg:    "apiVersion must be",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateTazunaTypeMeta(tt.tazuna)
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("expected error but got nil")
+					return
+				}
+				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("expected error message to contain %q, got: %s", tt.errMsg, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error but got: %v", err)
+			}
+		})
+	}
+}
+
 func containsString(haystack, needle string) bool {
 	return len(haystack) >= len(needle) &&
 		(haystack == needle || len(needle) == 0 ||

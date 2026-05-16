@@ -9,8 +9,7 @@ import (
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/genesissecret"
-	"gopkg.in/yaml.v3"
-	kyaml "sigs.k8s.io/yaml"
+	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -38,18 +37,13 @@ func NewGenesisSecret(
 
 // Apply implements Manager.
 func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
-	f, err := os.Open(m.Path)
+	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			err = errors.WithStack(cerr)
-		}
-	}()
 
 	genesisSecret := v1.GenesisSecret{}
-	if err := yaml.NewDecoder(f).Decode(&genesisSecret); err != nil {
+	if err := yaml.Unmarshal(data, &genesisSecret); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -98,19 +92,14 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 }
 
 // Destroy implements Manager.
-func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) (err error) {
-	f, err := os.Open(m.Path)
+func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return errors.WithStack(err)
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			err = errors.WithStack(cerr)
-		}
-	}()
 
 	genesisSecret := v1.GenesisSecret{}
-	if err := yaml.NewDecoder(f).Decode(&genesisSecret); err != nil {
+	if err := yaml.Unmarshal(data, &genesisSecret); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -152,19 +141,14 @@ func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.M
 var _ Manager = &GenesisSecret{}
 
 // Build implements Manager.
-func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (s string, err error) {
-	f, err := os.Open(m.Path)
+func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (string, error) {
+	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			err = errors.WithStack(cerr)
-		}
-	}()
 
 	genesisSecret := v1.GenesisSecret{}
-	if err := yaml.NewDecoder(f).Decode(&genesisSecret); err != nil {
+	if err := yaml.Unmarshal(data, &genesisSecret); err != nil {
 		return "", errors.WithStack(err)
 	}
 
@@ -204,9 +188,7 @@ func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Man
 		secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
 	}
 
-	// Kubernetes manifestとして正しいyamlを生成するために、
-	// sigs.k8s.io/yaml を使う必要がある
-	out, err := kyaml.Marshal(secret)
+	out, err := yaml.Marshal(secret)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}

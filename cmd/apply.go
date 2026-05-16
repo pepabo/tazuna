@@ -1,21 +1,15 @@
 package cmd
 
 import (
-	"log/slog"
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/cockroachdb/errors"
-	v1 "github.com/pepabo/tazuna/api/v1"
+	"github.com/pepabo/tazuna/cmd/internal/cliutil"
 	tazunacontext "github.com/pepabo/tazuna/pkg/context"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/pepabo/tazuna/pkg/validator"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // applyCmd represents the apply command
@@ -35,41 +29,22 @@ Examples:
   tazuna apply -f tazuna.yaml
   tazuna apply -f tazuna.yaml --tags web,batch
   tazuna apply -f tazuna.yaml --log-level debug`,
-	RunE: func(cmd *cobra.Command, args []string) (err error) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
 		}
 
-		logLevelS, err := cmd.Flags().GetString("log-level")
+		logger, err := cliutil.NewLogger(cmd)
 		if err != nil {
-			return errors.WithStack(err)
-		}
-		var logLevel slog.Level
-		switch strings.ToLower(logLevelS) {
-		case "debug":
-			logLevel = slog.LevelDebug
-		case "warn":
-			logLevel = slog.LevelWarn
-		case "error":
-			logLevel = slog.LevelError
-		default:
-			logLevel = slog.LevelInfo
-		}
-		logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
-
-		tags := []string{}
-		if v, err := cmd.Flags().GetStringSlice("tags"); err == nil {
-			tags = v
+			return err
 		}
 
-		restConfig, err := ctrl.GetConfig()
+		tags := getTags(cmd)
+
+		k8sClient, err := cliutil.NewK8sClient()
 		if err != nil {
-			return errors.WithStack(err)
-		}
-		k8sClient, err := client.New(restConfig, client.Options{})
-		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 
 		orasOpts, err := buildORASPullOptions(cmd)
@@ -79,23 +54,13 @@ Examples:
 
 		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts))
 
-		f, err := os.Open(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path)
 		if err != nil {
-			return errors.WithStack(err)
-		}
-		defer func() {
-			if cerr := f.Close(); cerr != nil {
-				err = errors.WithStack(cerr)
-			}
-		}()
-
-		tazuna := v1.Tazuna{}
-		if err := yaml.NewDecoder(f).Decode(&tazuna); err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 
 		// tazuna.yamlのvalidation（include展開前のバリデーション）
-		if err := validator.ValidateTazunaWithBasePath(&tazuna, filepath.Dir(path)); err != nil {
+		if err := validator.ValidateTazunaWithBasePath(tazuna, filepath.Dir(path)); err != nil {
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
@@ -105,7 +70,7 @@ Examples:
 			}
 		}
 
-		if err := r.Apply(cmd.Context(), tazuna, path); err != nil {
+		if err := r.Apply(cmd.Context(), *tazuna, path); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil
@@ -113,7 +78,7 @@ Examples:
 }
 
 func init() {
-	applyCmd.Flags().StringSliceP("tags", "t", []string{}, "Filter manifests by tag; only matching tags are applied")
+	addTagsFlag(applyCmd, "Filter manifests by tag; only matching tags are applied")
 	addORASPullFlags(applyCmd)
 	rootCmd.AddCommand(applyCmd)
 
