@@ -11,7 +11,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 const HintFileName = "tazuna.hint.yaml"

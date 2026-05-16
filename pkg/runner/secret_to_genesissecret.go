@@ -17,9 +17,9 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // SecretToGenesisSecret は、KubernetesのSecretを1Passwordに保存し、

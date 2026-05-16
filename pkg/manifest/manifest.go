@@ -3,9 +3,9 @@ package manifest
 import (
 	"bytes"
 
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // convertManifestsToObjects は複数の定義が入ったマニフェスト群を解析し、

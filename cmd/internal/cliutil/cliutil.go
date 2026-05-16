@@ -11,9 +11,9 @@ import (
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/yaml"
 )
 
 // ParseLogLevel maps the textual log level used by Tazuna's --log-level flag to
@@ -41,21 +41,14 @@ func NewLogger(cmd *cobra.Command) (*slog.Logger, error) {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: ParseLogLevel(logLevelS)})), nil
 }
 
-// LoadTazunaYAML opens path, decodes it as a v1.Tazuna document, and closes
-// the file. Decoding and close errors are joined so neither is dropped.
-func LoadTazunaYAML(path string) (_ *v1.Tazuna, err error) {
-	f, err := os.Open(path)
+// LoadTazunaYAML reads path and decodes it as a v1.Tazuna document.
+func LoadTazunaYAML(path string) (*v1.Tazuna, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil {
-			err = errors.Join(err, errors.WithStack(cerr))
-		}
-	}()
-
 	tazuna := v1.Tazuna{}
-	if err := yaml.NewDecoder(f).Decode(&tazuna); err != nil {
+	if err := yaml.Unmarshal(data, &tazuna); err != nil {
 		return nil, errors.WithStack(err)
 	}
 	return &tazuna, nil

@@ -13,7 +13,7 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/manager"
 	"github.com/pepabo/tazuna/pkg/testplugin"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 func (t *TazunaRunner) Apply(
@@ -139,19 +139,14 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 				includePath := filepath.Join(baseDir, include.Path)
 
 				// includeファイルを読み込み
-				includeFile, err := os.Open(includePath)
+				includeData, err := os.ReadFile(includePath)
 				if err != nil {
 					return errors.Wrapf(err, "failed to open include file: %s", includePath)
 				}
-				defer func(f *os.File) {
-					if cerr := f.Close(); cerr != nil {
-						t.logger.ErrorContext(ctx, "failed to close include file", slog.String("file", includePath), slog.String("error", cerr.Error()))
-					}
-				}(includeFile)
 
 				// includeファイルをパースして完全なTazuna構造として読み込む
 				var includeTazuna v1.Tazuna
-				if err := yaml.NewDecoder(includeFile).Decode(&includeTazuna); err != nil {
+				if err := yaml.Unmarshal(includeData, &includeTazuna); err != nil {
 					return errors.Wrapf(err, "failed to parse include file: %s", includePath)
 				}
 
