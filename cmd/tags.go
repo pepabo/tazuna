@@ -4,14 +4,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
 
 	"github.com/cockroachdb/errors"
-	v1 "github.com/pepabo/tazuna/api/v1"
+	"github.com/pepabo/tazuna/cmd/internal/cliutil"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/pepabo/tazuna/pkg/validator"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var tagsCmd = &cobra.Command{
@@ -21,34 +19,25 @@ var tagsCmd = &cobra.Command{
 
 Examples:
   tazuna tags -f tazuna.yaml`,
-	RunE: func(cmd *cobra.Command, args []string) (err error) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		f, err := os.Open(path)
+
+		tazuna, err := cliutil.LoadTazunaYAML(path)
 		if err != nil {
-			return errors.WithStack(err)
-		}
-		defer func() {
-			if cerr := f.Close(); cerr != nil {
-				err = errors.Join(err, errors.WithStack(cerr))
-			}
-		}()
-
-		tazuna := v1.Tazuna{}
-		if err := yaml.NewDecoder(f).Decode(&tazuna); err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 
-		if err := validator.ValidateTazuna(&tazuna); err != nil {
+		if err := validator.ValidateTazuna(tazuna); err != nil {
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
 		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 		r := runner.NewTazunaRunner(logger, nil, nil)
 
-		tags, err := r.ListTags(cmd.Context(), &tazuna, path)
+		tags, err := r.ListTags(cmd.Context(), tazuna, path)
 		if err != nil {
 			return errors.Wrapf(err, "failed to list tags for tazuna.yaml at %s", path)
 		}
