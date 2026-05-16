@@ -1,12 +1,51 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestPrintTagsFiltered_NoFilter(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	printTagsFiltered(&buf, map[string][]string{
+		"frontend": {"web"},
+		"backend":  {"api"},
+	}, nil)
+	got := buf.String()
+	// keys are sorted, so backend appears before frontend
+	if !strings.HasPrefix(got, "backend:\n- api\nfrontend:\n- web\n") {
+		t.Errorf("unexpected output:\n%s", got)
+	}
+}
+
+func TestPrintTagsFiltered_WithFilter(t *testing.T) {
+	t.Parallel()
+	var buf bytes.Buffer
+	printTagsFiltered(&buf, map[string][]string{
+		"frontend": {"web"},
+		"backend":  {"api"},
+		"infra":    {"vpc"},
+	}, []string{"frontend", "infra", "unknown"})
+	got := buf.String()
+	if strings.Contains(got, "backend") {
+		t.Errorf("filter leaked backend: %s", got)
+	}
+	if !strings.Contains(got, "frontend:\n- web") {
+		t.Errorf("frontend missing: %s", got)
+	}
+	if !strings.Contains(got, "infra:\n- vpc") {
+		t.Errorf("infra missing: %s", got)
+	}
+	if strings.Contains(got, "unknown") {
+		t.Errorf("unknown tag should be silently dropped: %s", got)
+	}
+}
 
 func resetTagsFlags(t *testing.T) {
 	t.Helper()

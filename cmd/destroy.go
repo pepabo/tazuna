@@ -45,10 +45,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		tags := []string{}
-		if v, err := cmd.Flags().GetStringSlice("tags"); err == nil {
-			tags = v
-		}
+		tags := getTags(cmd)
 		orasOpts, err := buildORASPullOptions(cmd)
 		if err != nil {
 			return err
@@ -96,7 +93,7 @@ Examples:
 
 func init() {
 	destroyCmd.Flags().Bool("force", false, "Delete without confirmation")
-	destroyCmd.Flags().StringSliceP("tags", "t", []string{}, "Filter manifests by tag; only matching tags are destroyed")
+	addTagsFlag(destroyCmd, "Filter manifests by tag; only matching tags are destroyed")
 	addORASPullFlags(destroyCmd)
 	rootCmd.AddCommand(destroyCmd)
 }
