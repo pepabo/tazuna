@@ -15,6 +15,10 @@ func ValidateTazuna(tazuna *v1.Tazuna) error {
 		return errors.New("tazuna is nil")
 	}
 
+	if err := ValidateTazunaTypeMeta(tazuna); err != nil {
+		return errors.WithStack(err)
+	}
+
 	if err := ValidateTazunaSpec(&tazuna.Spec, ""); err != nil {
 		return errors.WithStack(err)
 	}
@@ -28,10 +32,27 @@ func ValidateTazunaWithBasePath(tazuna *v1.Tazuna, basePath string) error {
 		return errors.New("tazuna is nil")
 	}
 
+	if err := ValidateTazunaTypeMeta(tazuna); err != nil {
+		return errors.WithStack(err)
+	}
+
 	if err := ValidateTazunaSpec(&tazuna.Spec, basePath); err != nil {
 		return errors.WithStack(err)
 	}
 
+	return nil
+}
+
+// ValidateTazunaTypeMeta は Tazuna の apiVersion / kind を検証します。
+// 後方互換のため未設定 (空文字) は許容しますが、値が設定されている場合は
+// v1.TazunaAPIVersion / v1.TazunaKind と完全一致している必要があります。
+func ValidateTazunaTypeMeta(tazuna *v1.Tazuna) error {
+	if tazuna.APIVersion != "" && tazuna.APIVersion != v1.TazunaAPIVersion {
+		return errors.Errorf("apiVersion must be %q, got %q", v1.TazunaAPIVersion, tazuna.APIVersion)
+	}
+	if tazuna.Kind != "" && tazuna.Kind != v1.TazunaKind {
+		return errors.Errorf("kind must be %q, got %q", v1.TazunaKind, tazuna.Kind)
+	}
 	return nil
 }
 

@@ -53,7 +53,7 @@ func (t *TazunaRunner) StateSync(
 	testPlugins := setupTestPlugins(t.k8sClient)
 	store := state.NewConfigMapStateStore(t.k8sClient)
 	autoDelete := strings.ToLower(os.Getenv("TAZUNA_STATE_SYNC_DELETE")) == "true"
-	gitCommit := getGitCommitHash()
+	gitCommit := getGitCommitHash(ctx)
 
 	// atomicモード時はステート保存を全manifest処理完了後にまとめて行う
 	pendingSaves := make(map[string]*state.StateData)
@@ -257,8 +257,8 @@ func buildUnstructuredFromStateKey(keyStr string) (*unstructured.Unstructured, e
 }
 
 // getGitCommitHash は現在のgit commit hashを取得する
-func getGitCommitHash() string {
-	out, err := exec.Command("git", "rev-parse", "HEAD").Output()
+func getGitCommitHash(ctx context.Context) string {
+	out, err := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
 	if err != nil {
 		return ""
 	}

@@ -1,16 +1,16 @@
 package v1
 
 type Provider struct {
-	Spec ProviderSpec `yaml:"spec"`
+	Spec ProviderSpec `json:"spec"`
 }
 
 type ProviderSpec struct {
-	Requirements []ProviderRequirement `yaml:"requirements"`
+	Requirements []ProviderRequirement `json:"requirements"`
 }
 
 type ProviderRequirement struct {
-	Name    string   `yaml:"name"`
-	Command []string `yaml:"command"`
+	Name    string   `json:"name"`
+	Command []string `json:"command"`
 }
 
 func (Provider) GetKind() string {

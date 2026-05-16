@@ -1,47 +1,40 @@
 package v1
 
 type GenesisSecret struct {
-	Spec GenesisSecretSpec `yaml:"spec"`
+	Spec GenesisSecretSpec `json:"spec"`
 }
 
 type GenesisSecretSpec struct {
-	Provider string                  `yaml:"provider"`
-	Secrets  []GenesisSecretGenerate `yaml:"secrets"`
-	Outputs  []GenesisSecretOutput   `yaml:"outputs"`
+	Provider string                  `json:"provider"`
+	Secrets  []GenesisSecretGenerate `json:"secrets"`
+	Outputs  []GenesisSecretOutput   `json:"outputs"`
 }
 
 type GenesisSecretGenerate struct {
 	// PreferLabelはID->ValueのマッピングではなくLabel->Valueを作る
 	// カスタムのkey-valueを作るとIDがランダム文字列になるので、それを可能にするために定義する
-	PreferLabel bool                                 `yaml:"preferLabel"`
-	URI         string                               `yaml:"uri"`
-	Items       map[string]GenesisSecretGenerateItem `yaml:"items"`
+	PreferLabel bool                                 `json:"preferLabel"`
+	URI         string                               `json:"uri"`
+	Items       map[string]GenesisSecretGenerateItem `json:"items"`
 }
 
 type GenesisSecretGenerateItem struct {
-	MapTo string `yaml:"mapTo"`
+	MapTo string `json:"mapTo"`
 }
 
 type GenesisSecretOutput struct {
-	Stdout           *GenesisSecretOutputStdout           `yaml:"stdout,omitempty"`
-	KubernetesSecret *GenesisSecretOutputKubernetesSecret `yaml:"kubernetesSecret,omitempty"`
+	Stdout           *GenesisSecretOutputStdout           `json:"stdout,omitempty"`
+	KubernetesSecret *GenesisSecretOutputKubernetesSecret `json:"kubernetesSecret,omitempty"`
 }
 
 type GenesisSecretOutputStdout struct{}
 
 type GenesisSecretOutputKubernetesSecret struct {
-	Context     string            `yaml:"context"`
-	Namespace   string            `yaml:"namespace"`
-	Name        string            `yaml:"name"`
-	Labels      map[string]string `yaml:"labels"`
-	Annotations map[string]string `yaml:"annotations"`
+	Context     string            `json:"context"`
+	Namespace   string            `json:"namespace"`
+	Name        string            `json:"name"`
+	Labels      map[string]string `json:"labels"`
+	Annotations map[string]string `json:"annotations"`
 	// corev1.SecretType を指定する
-	Type string `yaml:"type"`
-}
-
-func (GenesisSecret) GetKind() string {
-	return "GenesisSecret"
-}
-func (GenesisSecret) GetName() string {
-	return ""
+	Type string `json:"type"`
 }
