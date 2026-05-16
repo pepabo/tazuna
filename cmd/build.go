@@ -35,10 +35,7 @@ Examples:
 			return err
 		}
 
-		tags := []string{}
-		if v, err := cmd.Flags().GetStringSlice("tags"); err == nil {
-			tags = v
-		}
+		tags := getTags(cmd)
 
 		k8sClient, err := cliutil.NewK8sClient()
 		if err != nil {
@@ -72,7 +69,7 @@ Examples:
 
 func init() {
 	buildCmd.Flags().String("cluster-name", "kind-tazuna", "cluster name")
-	buildCmd.Flags().StringSliceP("tags", "t", []string{}, "Filter manifests by tag; only matching tags are built")
+	addTagsFlag(buildCmd, "Filter manifests by tag; only matching tags are built")
 	addORASPullFlags(buildCmd)
 	rootCmd.AddCommand(buildCmd)
 }

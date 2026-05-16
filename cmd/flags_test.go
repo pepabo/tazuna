@@ -84,6 +84,12 @@ func TestSubcommandFlags(t *testing.T) {
 			},
 		},
 		{
+			cmd: tagsCmd,
+			flags: []flagSpec{
+				{name: "tags", defaultVal: "[]"},
+			},
+		},
+		{
 			cmd: stateSyncCmd,
 			flags: []flagSpec{
 				{name: "atomic", defaultVal: "false"},
