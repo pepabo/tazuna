@@ -4,12 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+
+	"github.com/cockroachdb/errors"
 )
 
 type CommandClient struct{}
 
 // GetVault implements Client.
 func (c *CommandClient) GetVault(ctx context.Context, vaultName string) (Vault, error) {
+	if err := ValidateIdentifier("vault", vaultName); err != nil {
+		return Vault{}, errors.WithStack(err)
+	}
 	cmds := NewCommandBuilder().WithVault(
 		NewVaultCommandBuilder().
 			WithGet(
@@ -34,6 +39,12 @@ func (c *CommandClient) GetVault(ctx context.Context, vaultName string) (Vault, 
 
 // GetVaultItem implements Client.
 func (c *CommandClient) GetVaultItem(ctx context.Context, vaultName string, itemName string) (Item, error) {
+	if err := ValidateIdentifier("vault", vaultName); err != nil {
+		return Item{}, errors.WithStack(err)
+	}
+	if err := ValidateIdentifier("item", itemName); err != nil {
+		return Item{}, errors.WithStack(err)
+	}
 	cmds := NewCommandBuilder().
 		WithItem(
 			NewItemCommandBuilder().
@@ -59,6 +70,9 @@ func (c *CommandClient) GetVaultItem(ctx context.Context, vaultName string, item
 }
 
 func (c *CommandClient) ListVaultItems(ctx context.Context, vaultName string) ([]Item, error) {
+	if err := ValidateIdentifier("vault", vaultName); err != nil {
+		return nil, errors.WithStack(err)
+	}
 	cmds := NewCommandBuilder().
 		WithItem(
 			NewItemCommandBuilder().
