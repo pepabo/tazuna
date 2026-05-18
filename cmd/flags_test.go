@@ -139,6 +139,7 @@ func TestSubcommandsAreRegisteredOnRoot(t *testing.T) {
 		"tags":                    true,
 		"state":                   true,
 		"secret-to-genesissecret": true,
+		"version":                 true,
 	}
 	for _, c := range rootCmd.Commands() {
 		delete(want, c.Name())
