@@ -1,0 +1,44 @@
+# golangci-lint configuration (schema v2).
+#
+# Goal: pin the set of linters that actually run so CI is reproducible across
+# golangci-lint upgrades. Keep the set conservative — adding a new linter is a
+# deliberate change reviewed in its own PR, not a side effect of upgrading.
+
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  # Disable everything by default, then opt in. This keeps the active set
+  # explicit even when golangci-lint changes its defaults.
+  default: none
+  enable:
+    # Standard set (matches golangci-lint's "standard" preset).
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    # Extras chosen for low false-positive rate.
+    - bodyclose      # http.Response.Body close
+    - copyloopvar    # Go 1.22+ loop-var capture (harmless after 1.22, but catches stale code)
+    - misspell       # English typos in comments and strings
+    - unconvert      # redundant type conversions
+  settings:
+    misspell:
+      locale: US
+  exclusions:
+    # Generated and vendored code should not be linted.
+    generated: lax
+    rules:
+      # Tests legitimately discard errors and use insecure patterns; relax
+      # noisy linters there.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
