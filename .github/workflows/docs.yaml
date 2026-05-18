@@ -20,7 +20,7 @@ permissions:
 
 env:
   MDBOOK_VERSION: "0.5.2"
-  MDBOOK_I18N_HELPERS_VERSION: "0.3.6"
+  MDBOOK_I18N_HELPERS_VERSION: "0.4.0"
 
 jobs:
   build:
