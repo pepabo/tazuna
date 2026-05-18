@@ -19,7 +19,8 @@ Main subcommands:
   check                    Validate tazuna.yaml
   destroy                  Delete tazuna-managed resources from the cluster
   tags                     List the tags defined in tazuna.yaml
-  secret-to-genesissecret  Save existing Secrets to 1Password and generate GenesisSecret`,
+  secret-to-genesissecret  Save existing Secrets to 1Password and generate GenesisSecret
+  version                  Print version, commit, and build date`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	},
