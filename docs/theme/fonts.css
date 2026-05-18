@@ -1,0 +1,31 @@
+/*
+ * Font: M PLUS U (https://fonts.google.com/specimen/M+PLUS+U)
+ * Copyright 2021 The M+ FONTS Project Authors
+ * Licensed under the SIL Open Font License, Version 1.1 (OFL-1.1)
+ * See docs/THIRDPARTY.md for details.
+ */
+@import url("https://fonts.googleapis.com/css2?family=M+PLUS+U:wght@400;500;700&display=swap");
+
+:root {
+  --font-sans-tazuna: "M PLUS U", system-ui, -apple-system, "Segoe UI",
+    "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+}
+
+html,
+body,
+.menu-title,
+.chapter,
+.content,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-sans-tazuna);
+}

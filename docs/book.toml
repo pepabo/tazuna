@@ -1,0 +1,13 @@
+[book]
+title = "Tazuna"
+authors = ["Pepabo"]
+language = "en"
+src = "src"
+
+[preprocessor.gettext]
+after = ["links"]
+
+[output.html]
+git-repository-url = "https://github.com/pepabo/tazuna"
+edit-url-template = "https://github.com/pepabo/tazuna/edit/main/docs/{path}"
+additional-css = ["theme/fonts.css"]
