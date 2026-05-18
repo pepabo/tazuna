@@ -76,10 +76,12 @@ Then open `po/ja.po` and translate the new `msgid` entries.
 
 `.github/workflows/docs.yaml` handles deployment:
 
-- On `push` to `main`, the built site is published to the `gh-pages` branch.
-- On pull requests, a preview is published to
-  `https://pepabo.github.io/tazuna/pr-preview/pr-<N>/` and posted as a comment
-  on the PR. The preview is removed automatically when the PR is closed.
+- On `push` to `main`, the site is built and deployed to GitHub Pages via the
+  official `actions/upload-pages-artifact` + `actions/deploy-pages` flow.
+- On pull requests, only the build runs. The resulting site is available as a
+  `github-pages` artifact on the workflow run — download and extract it locally
+  to preview changes before merging. Live URL previews are intentionally not
+  provided, since GitHub Pages only supports a single deployment per site.
 
 ## Third-party assets
 
@@ -92,10 +94,11 @@ icon set, or other third-party asset.
 
 After merging the initial workflow, configure the repository once:
 
-1. Push to `main` so the workflow creates the `gh-pages` branch.
-2. Go to **Settings → Pages**.
-3. Set **Source** to *Deploy from a branch* and select `gh-pages` / `(root)`.
-4. Wait a minute, then open <https://pepabo.github.io/tazuna/>.
+1. Go to **Settings → Pages**.
+2. Set **Source** to *GitHub Actions*.
+3. Push to `main` (or re-run the workflow on `main`). The `deploy` job creates
+   the `github-pages` environment on its first successful run.
+4. Wait for the workflow to finish, then open <https://pepabo.github.io/tazuna/>.
 
 [mdBook]: https://rust-lang.github.io/mdBook/
 [mdbook-i18n-helpers]: https://github.com/google/mdbook-i18n-helpers
