@@ -27,10 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install mdBook
-        uses: peaceiris/actions-mdbook@ee69d52ca7910e8b6f4b1ddd2b134915b9bcdcfb # v2.0.0
-        with:
-          mdbook-version: ${{ env.MDBOOK_VERSION }}
       - name: Set up Rust toolchain
         uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
         with:
@@ -38,7 +34,9 @@ jobs:
       - name: Cache Rust build
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
         with:
-          key: mdbook-i18n-helpers-${{ env.MDBOOK_I18N_HELPERS_VERSION }}
+          key: mdbook-${{ env.MDBOOK_VERSION }}-i18n-helpers-${{ env.MDBOOK_I18N_HELPERS_VERSION }}
+      - name: Install mdBook
+        run: cargo install mdbook --no-default-features --features search --locked --version ${{ env.MDBOOK_VERSION }}
       - name: Install mdbook-i18n-helpers
         run: cargo install mdbook-i18n-helpers --locked --version ${{ env.MDBOOK_I18N_HELPERS_VERSION }}
       - name: Build (English)
