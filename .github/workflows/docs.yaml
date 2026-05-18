@@ -7,7 +7,6 @@ on:
       - "docs/**"
       - ".github/workflows/docs.yaml"
   pull_request:
-    types: [opened, reopened, synchronize, closed]
     paths:
       - "docs/**"
       - ".github/workflows/docs.yaml"
@@ -17,8 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 env:
   MDBOOK_VERSION: "0.5.2"
@@ -53,48 +51,24 @@ jobs:
         run: mdbook build -d book/ja
       - name: Compose language landing
         run: cp docs/static/index.html docs/book/index.html
-      - name: Upload site artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658c3e0aa114b29229ed2bb8db # v4.0.0
         with:
-          name: book
           path: docs/book
-          if-no-files-found: error
 
-  deploy-main:
+  deploy:
     needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download site artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: book
-          path: book
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./book
-          publish_branch: gh-pages
-          keep_files: true
-          exclude_assets: "pr-preview"
-
-  preview:
-    needs: build
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Download site artifact
-        if: github.event.action != 'closed'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: book
-          path: book
-      - name: Deploy preview
-        uses: rossjrw/pr-preview-action@ffa7509e91a3ec8dfc2e5536c4d5c1acdf7a6de9 # v1.8.1
-        with:
-          source-dir: ./book
-          preview-branch: gh-pages
-          umbrella-dir: pr-preview
-          action: auto
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
