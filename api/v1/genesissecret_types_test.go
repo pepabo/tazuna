@@ -97,4 +97,3 @@ func TestGenesisSecretOutput_StdoutOnly(t *testing.T) {
 		t.Errorf("KubernetesSecret = %+v, want nil (omitted)", got.KubernetesSecret)
 	}
 }
-
