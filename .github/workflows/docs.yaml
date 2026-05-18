@@ -1,0 +1,100 @@
+name: Documentation
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yaml"
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  MDBOOK_VERSION: "0.5.2"
+  MDBOOK_I18N_HELPERS_VERSION: "0.3.6"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@ee69d52ca7910e8b6f4b1ddd2b134915b9bcdcfb # v2.0.0
+        with:
+          mdbook-version: ${{ env.MDBOOK_VERSION }}
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b # stable
+        with:
+          toolchain: stable
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          key: mdbook-i18n-helpers-${{ env.MDBOOK_I18N_HELPERS_VERSION }}
+      - name: Install mdbook-i18n-helpers
+        run: cargo install mdbook-i18n-helpers --locked --version ${{ env.MDBOOK_I18N_HELPERS_VERSION }}
+      - name: Build (English)
+        working-directory: docs
+        run: mdbook build -d book/en
+      - name: Build (Japanese)
+        working-directory: docs
+        env:
+          MDBOOK_BOOK__LANGUAGE: ja
+        run: mdbook build -d book/ja
+      - name: Compose language landing
+        run: cp docs/static/index.html docs/book/index.html
+      - name: Upload site artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: book
+          path: docs/book
+          if-no-files-found: error
+
+  deploy-main:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download site artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: book
+          path: book
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./book
+          publish_branch: gh-pages
+          keep_files: true
+          exclude_assets: "pr-preview"
+
+  preview:
+    needs: build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Download site artifact
+        if: github.event.action != 'closed'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: book
+          path: book
+      - name: Deploy preview
+        uses: rossjrw/pr-preview-action@ffa7509e91a3ec8dfc2e5536c4d5c1acdf7a6de9 # v1.8.1
+        with:
+          source-dir: ./book
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: auto
