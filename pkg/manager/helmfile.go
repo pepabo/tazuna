@@ -429,7 +429,7 @@ func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest
 		return "", errors.WithStack(err)
 	}
 
-	return string(out), nil
+	return out, nil
 }
 
 // isDeploymentReady は Deployment が Ready かどうかを確認します
