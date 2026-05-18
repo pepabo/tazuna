@@ -1,4 +1,4 @@
-.PHONY: all format test test-integration test-e2e test-all build devenv-create devenv-destroy install lint
+.PHONY: all format test test-integration test-e2e test-all cover build devenv-create devenv-destroy install lint
 
 all: format test build lint
 
@@ -7,6 +7,10 @@ format:
 
 test:
 	go test ./...
+
+cover:
+	go test -race -covermode=atomic -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out | tail -1
 
 test-integration:
 	go test -tags=integration ./...
