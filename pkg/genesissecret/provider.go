@@ -6,8 +6,6 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 )
 
-const ()
-
 // SecretProvider はGenesisSecretが秘匿情報を取得する先を抽象化して提供します
 // NOTE: SecretProvider[Arg comparable] というジェネリクスを利用して、
 //

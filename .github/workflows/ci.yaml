@@ -52,7 +52,32 @@ jobs:
           ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
           ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
     - name: test
-      run: go test ./...
+      run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+    - name: coverage summary
+      if: always()
+      run: |
+        if [ -f coverage.out ]; then
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {print $3}')
+          {
+            echo "### Unit test coverage"
+            echo ""
+            echo "Total: \`${total}\`"
+            echo ""
+            echo "<details><summary>Per-package</summary>"
+            echo ""
+            echo '```'
+            go tool cover -func=coverage.out | awk '$1 ~ /\.go:/ {next} {print}'
+            echo '```'
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+    - name: upload coverage artifact
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: coverage-unit
+        path: coverage.out
+        if-no-files-found: ignore
     - name: build
       run: go build .
 
