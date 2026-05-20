@@ -1,7 +1,7 @@
 [book]
 title = "Tazuna"
 authors = ["Pepabo"]
-language = "en"
+language = "ja"
 src = "src"
 
 [preprocessor.gettext]

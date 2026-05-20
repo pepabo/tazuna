@@ -39,14 +39,14 @@ jobs:
         run: cargo install mdbook --no-default-features --features search --locked --version ${{ env.MDBOOK_VERSION }}
       - name: Install mdbook-i18n-helpers
         run: cargo install mdbook-i18n-helpers --locked --version ${{ env.MDBOOK_I18N_HELPERS_VERSION }}
-      - name: Build (English)
-        working-directory: docs
-        run: mdbook build -d book/en
       - name: Build (Japanese)
         working-directory: docs
-        env:
-          MDBOOK_BOOK__LANGUAGE: ja
         run: mdbook build -d book/ja
+      - name: Build (English)
+        working-directory: docs
+        env:
+          MDBOOK_BOOK__LANGUAGE: en
+        run: mdbook build -d book/en
       - name: Compose language landing
         run: cp docs/static/index.html docs/book/index.html
       - name: Configure GitHub Pages
