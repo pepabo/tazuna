@@ -1,5 +1,5 @@
-# Hello, World!
+# ようこそ！
 
-Welcome to the Tazuna documentation.
+Tazuna ドキュメントへようこそ。
 
-Tazuna is a CLI tool for managing the bootstrap lifecycle of multi-cluster Kubernetes environments.
+Tazuna は、マルチクラスタ Kubernetes 環境のブートストラップライフサイクルを管理するための CLI ツールです。

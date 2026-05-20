@@ -1,0 +1,1236 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Tazuna\n"
+"POT-Creation-Date: 2026-05-20T18:15:39+09:00\n"
+"PO-Revision-Date: 2026-05-20\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/SUMMARY.md:1
+msgid "目次"
+msgstr "Summary"
+
+#: src/SUMMARY.md:3
+msgid "はじめに"
+msgstr "Introduction"
+
+#: src/SUMMARY.md:4 src/getting-started/index.md:1
+msgid "はじめかた"
+msgstr "Getting Started"
+
+#: src/SUMMARY.md:5 src/concepts/index.md:1
+msgid "概念"
+msgstr "Concepts"
+
+#: src/SUMMARY.md:6 src/concepts/design-philosophy.md:1
+msgid "設計思想と想定ユースケース"
+msgstr "Design Philosophy and Intended Use Cases"
+
+#: src/SUMMARY.md:7 src/concepts/architecture.md:1
+msgid "全体アーキテクチャ"
+msgstr "Overall Architecture"
+
+#: src/SUMMARY.md:8 src/concepts/glossary.md:1
+msgid "用語集"
+msgstr "Glossary"
+
+#: src/SUMMARY.md:9 src/guides/index.md:1
+msgid "ガイド"
+msgstr "Guides"
+
+#: src/SUMMARY.md:10 src/operations/index.md:1
+msgid "運用"
+msgstr "Operations"
+
+#: src/SUMMARY.md:11 src/reference/index.md:1
+msgid "リファレンス"
+msgstr "Reference"
+
+#: src/SUMMARY.md:12 src/contributing/index.md:1
+msgid "コントリビュート"
+msgstr "Contributing"
+
+#: src/introduction.md:1
+msgid "ようこそ！"
+msgstr "Hello, World!"
+
+#: src/introduction.md:3
+msgid "Tazuna ドキュメントへようこそ。"
+msgstr "Welcome to the Tazuna documentation."
+
+#: src/introduction.md:5
+msgid ""
+"Tazuna は、マルチクラスタ Kubernetes 環境のブートストラップライフサイクルを管"
+"理するための CLI ツールです。"
+msgstr ""
+"Tazuna is a CLI tool for managing the bootstrap lifecycle of multi-cluster "
+"Kubernetes environments."
+
+#: src/getting-started/index.md:3
+msgid "TODO: はじめかたのコンテンツを追加する。"
+msgstr "TODO: Add getting started content."
+
+#: src/concepts/index.md:3
+msgid ""
+"このセクションでは、Tazuna がどのような問題を解こうとしているのか、 そしてそ"
+"のためにどのような設計を採用しているのかを順を追って説明します。"
+msgstr ""
+"This section walks through what problems Tazuna is trying to solve, and the "
+"design choices it makes to address them."
+
+#: src/concepts/index.md:6
+msgid ""
+"「動かし方」よりも「なぜそのような形になっているか」を中心に書いているため、 "
+"具体的なコマンド一覧や CLI フラグについては [リファレンス](../reference/"
+"index.md)、 具体的な手順については [ガイド](../guides/index.md) を参照してく"
+"ださい。"
+msgstr ""
+"It focuses on *why* Tazuna is shaped the way it is rather than *how* to "
+"drive it. For concrete command listings and CLI flags, see the "
+"[Reference](../reference/index.md); for step-by-step procedures, see the "
+"[Guides](../guides/index.md)."
+
+#: src/concepts/index.md:10
+msgid "読み進め方"
+msgstr "How to read this section"
+
+#: src/concepts/index.md:12
+msgid "おすすめの読み順は次のとおりです。"
+msgstr "The recommended reading order is as follows."
+
+#: src/concepts/index.md:14
+msgid ""
+"**[設計思想と想定ユースケース](./design-philosophy.md)** — Tazuna が何のため"
+"に存在し、 どんな現場で使われることを想定しているかを最初に押さえます。"
+msgstr ""
+"**[Design Philosophy and Intended Use Cases](./design-philosophy.md)** — "
+"start here to understand what Tazuna exists for and the environments it is "
+"designed for."
+
+#: src/concepts/index.md:16
+msgid ""
+"**[全体アーキテクチャ](./architecture.md)** — `tazuna` バイナリの中に どんな"
+"コンポーネントが入っていて、どのように協調するかを俯瞰します。"
+msgstr ""
+"**[Overall Architecture](./architecture.md)** — an overview of the "
+"components inside the `tazuna` binary and how they cooperate."
+
+#: src/concepts/index.md:18
+msgid ""
+"**[用語集](./glossary.md)** — このセクションで使われる用語の定義をまとめてい"
+"ます。"
+msgstr ""
+"**[Glossary](./glossary.md)** — definitions of the terms used throughout "
+"this section."
+
+#: src/concepts/index.md:20
+msgid ""
+"`tazuna.yaml` のスキーマや各 Manifest backend、State / マルチクラスタ / "
+"Secret 連携の挙動など、より具体的な仕様は [リファレンス](../reference/"
+"index.md) を参照してください。 途中で分からない言葉が出てきた場合は、まず用語"
+"集を参照してください。"
+msgstr ""
+"For more concrete specifications — the `tazuna.yaml` schema, each manifest "
+"backend, and the behavior of state, multi-cluster, and secret integration — "
+"see the [Reference](../reference/index.md). If you encounter an unfamiliar "
+"term, consult the glossary first."
+
+#: src/concepts/design-philosophy.md:3
+msgid ""
+"Tazuna は「マルチクラスタ Kubernetes のブートストラップライフサイクルを管理す"
+"る CLI」です。 ここでは、なぜそういうツールが必要になるのか、Tazuna が何を肩"
+"代わりし、何は肩代わりしないのか、 という設計上のスタンスを整理します。"
+msgstr ""
+"Tazuna is \"a CLI for managing the bootstrap lifecycle of multi-cluster "
+"Kubernetes.\" This page lays out the design stance behind it: why such a "
+"tool is needed, what Tazuna takes on, and what it deliberately leaves to "
+"others."
+
+#: src/concepts/design-philosophy.md:7
+msgid "解こうとしている問題"
+msgstr "The problem we are trying to solve"
+
+#: src/concepts/design-philosophy.md:9
+msgid ""
+"Kubernetes クラスタは、API サーバが立ち上がっただけでは実用には使えません。 "
+"そこから「自分たちのクラスタ」と呼べる状態にするまでには、"
+msgstr ""
+"A Kubernetes cluster is not yet usable just because its API server is up. "
+"To get from there to a state you can call \"our cluster,\" you need to "
+"install:"
+
+#: src/concepts/design-philosophy.md:12
+msgid "CNI / Ingress / cert-manager のような **インフラ層のアドオン**"
+msgstr ""
+"**Infrastructure-layer add-ons** such as CNI, Ingress, and cert-manager"
+
+#: src/concepts/design-philosophy.md:13
+msgid "ArgoCD / Flux のような **デプロイ基盤そのもの**"
+msgstr "**The deployment platform itself**, such as ArgoCD or Flux"
+
+#: src/concepts/design-philosophy.md:14
+msgid "各種オペレータや CRD"
+msgstr "Various operators and CRDs"
+
+#: src/concepts/design-philosophy.md:16
+msgid ""
+"といったレイヤを、**正しい順序で、依存関係を保ちながら** クラスタに入れる必要"
+"があります。"
+msgstr ""
+"All of these layers must be installed into the cluster **in the correct "
+"order, preserving their dependencies**."
+
+#: src/concepts/design-philosophy.md:18
+msgid ""
+"これを手作業や 複雑な運用手順書、シンプルなシェルスクリプトで代用すると、"
+msgstr ""
+"If you substitute manual work, sprawling runbooks, or simple shell scripts "
+"for this, you run into problems like:"
+
+#: src/concepts/design-philosophy.md:20
+msgid "どこまで適用したか分からなくなる（=「state がない」）"
+msgstr "Losing track of what has been applied (i.e. \"there is no state\")"
+
+#: src/concepts/design-philosophy.md:21
+msgid "クラスタのブートストラップ手順が古くなる"
+msgstr "The cluster bootstrap procedure going stale"
+
+#: src/concepts/design-philosophy.md:23
+msgid ""
+"といった問題が積み上がります。Tazuna はここに **単一の宣言的な設定ファイル** "
+"と **統一された CLI** を持ち込み、ブートストラップという「特定の段階」だけを"
+"明示的に扱います。"
+msgstr ""
+"These problems pile up. Tazuna addresses this by bringing in **a single "
+"declarative configuration file** and **a unified CLI**, explicitly handling "
+"just the \"bootstrap\" phase."
+
+#: src/concepts/design-philosophy.md:26
+msgid "Kubernetesクラスタをイミュータブルに運用するアイデア"
+msgstr "The idea of running Kubernetes clusters immutably"
+
+#: src/concepts/design-philosophy.md:28
+msgid ""
+"Tazuna の背景にある考え方のひとつが、Kubernetes クラスタそのものを **イミュー"
+"タブル（不変）なリソースとして扱う** という発想です。 ここでいうイミュータブ"
+"ルとは、**「動いているクラスタを継ぎ足しで直していく」のをやめて、 クラスタは"
+"常に同じ手順で作り直せる状態にしておく** ことを指します。"
+msgstr ""
+"One of the ideas behind Tazuna is to **treat the Kubernetes cluster itself "
+"as an immutable resource**. \"Immutable\" here means **giving up on "
+"patching a running cluster in place over time, and instead keeping the "
+"cluster in a state where it can always be rebuilt by the same procedure**."
+
+#: src/concepts/design-philosophy.md:33
+msgid ""
+"ここで「不変」と言っているのは **クラスタの土台レイヤ** の話です。 "
+"Deployment で動いているアプリケーションの Pod が新しいイメージに置き換わった"
+"り、 HPA でレプリカ数が変化したりすることを mutate と呼んでいるわけではありま"
+"せん。 対象にしているのは、CNI / Ingress / cert-manager / ArgoCD といった **"
+"インフラアドオン**や、それらが依存する CRD やオペレータといった、 クラスタを"
+"「クラスタとして成立させている」基盤レイヤです。 アプリケーションレイヤは、そ"
+"の上で GitOps によって自由に mutate されてかまいません。"
+msgstr ""
+"When we say \"immutable\" here, we mean **the cluster's foundation layer**. "
+"We are not calling it a mutation when an application Pod managed by a "
+"Deployment is replaced with a new image, or when HPA changes the replica "
+"count. What we have in mind is the **infrastructure add-ons** such as CNI, "
+"Ingress, cert-manager, and ArgoCD, along with the CRDs and operators they "
+"depend on — the foundation layer that makes the cluster \"a cluster\" in "
+"the first place. The application layer on top is free to mutate via GitOps."
+
+#: src/concepts/design-philosophy.md:41
+msgid ""
+"長期間運用していると、クラスタには次のような変更が少しずつ溜まっていきます。"
+msgstr ""
+"Over a long operational lifetime, changes like the following slowly "
+"accumulate on a cluster:"
+
+#: src/concepts/design-philosophy.md:43
+msgid "障害対応のなかで誰かが `kubectl apply` した暫定マニフェスト"
+msgstr ""
+"Provisional manifests that someone `kubectl apply`ed during an incident "
+"response"
+
+#: src/concepts/design-philosophy.md:44
+msgid "バージョン調査のために手で入れ替えた CRD やオペレータ"
+msgstr "CRDs or operators swapped out by hand to investigate a version"
+
+#: src/concepts/design-philosophy.md:45
+msgid "手元の `helm install` で入った add-on"
+msgstr "Add-ons installed with a local `helm install`"
+
+#: src/concepts/design-philosophy.md:47
+msgid ""
+"これらが積み重なると、**「実際に動いているクラスタ」と「コードで宣言したクラ"
+"スタ」が 徐々にずれていく**（コンフィグレーションドリフト）状態になります。 "
+"こうなるとクラスタを作り直すコストが跳ね上がり、DR / リージョン追加 / "
+"Kubernetes バージョンアップといった「クラスタごと入れ替えたい」場面で動けなく"
+"なります。"
+msgstr ""
+"As these pile up, **the cluster that is actually running and the cluster "
+"declared in code drift apart** (configuration drift). Once that happens, "
+"the cost of rebuilding the cluster shoots up, and you can no longer move "
+"when you want to \"swap out the whole cluster\" — for DR, adding a region, "
+"or a Kubernetes version upgrade."
+
+#: src/concepts/design-philosophy.md:52
+msgid "イミュータブルに運用するというのは、この状況を裏返して、"
+msgstr "Running clusters immutably means flipping that situation around:"
+
+#: src/concepts/design-philosophy.md:54
+msgid ""
+"クラスタの中身は **すべて宣言された設定から再生成できる** ことを前提にする"
+msgstr ""
+"Assume the cluster's contents **can all be regenerated from declared "
+"configuration**"
+
+#: src/concepts/design-philosophy.md:55
+msgid ""
+"ブートストラップ後の add-on レイヤは、必要なら **一度クラスタを捨てて作り直し"
+"ても同じになる**"
+msgstr ""
+"The post-bootstrap add-on layer should **come out the same even if the "
+"cluster is thrown away and rebuilt from scratch**"
+
+#: src/concepts/design-philosophy.md:56
+msgid "手で入れたものは「いつ消えても良いもの」と割り切るか、宣言側に取り込む"
+msgstr ""
+"Treat anything installed by hand as \"fine to disappear at any time,\" or "
+"fold it back into the declaration"
+
+#: src/concepts/design-philosophy.md:58
+msgid ""
+"という運用スタイルを選ぶことです。アプリケーションレイヤであれば、これは "
+"ArgoCD や Flux のような GitOps ツールがすでに担保しています。 一方で、**その "
+"GitOps ツール自身を含む「ブートストラップ層」** は、 従来は手順書とシェルスク"
+"リプトに頼りがちで、イミュータブルさが最も崩れやすい場所でした。"
+msgstr ""
+"That is the operational stance immutable operation entails. For the "
+"application layer, GitOps tools like ArgoCD and Flux already guarantee "
+"this. By contrast, **the \"bootstrap layer\" — which includes those GitOps "
+"tools themselves** — has traditionally relied on runbooks and shell scripts "
+"and has been the place where immutability is most easily lost."
+
+#: src/concepts/design-philosophy.md:63
+msgid ""
+"Tazuna は、このブートストラップ層をイミュータブル運用の枠に乗せるための部品と"
+"して位置付けています。"
+msgstr ""
+"Tazuna positions itself as the piece that brings this bootstrap layer onto "
+"the same immutable footing."
+
+#: src/concepts/design-philosophy.md:65
+msgid ""
+"`tazuna.yaml` という **単一の宣言的な設定ファイル** に CNI / Ingress / cert-"
+"manager / ArgoCD などの構成順序を書き切ることで、クラスタの初期状態を **コー"
+"ドから一意に再生成できる**ようにします。"
+msgstr ""
+"By writing the ordering of CNI / Ingress / cert-manager / ArgoCD and so on "
+"into a **single declarative configuration file**, `tazuna.yaml`, the "
+"cluster's initial state becomes **uniquely regenerable from code**."
+
+#: src/concepts/design-philosophy.md:68
+msgid ""
+"`tazuna apply` は、その宣言と実クラスタの差分を埋める操作です。 「新規クラス"
+"タの初日」と「既存クラスタへの追従」を **同じコマンド** で扱うので、 作り直し"
+"たクラスタも既存クラスタも、最終的に同じ宣言に収束します。"
+msgstr ""
+"`tazuna apply` is the operation that closes the gap between that "
+"declaration and the live cluster. \"Day one of a new cluster\" and "
+"\"catching up an existing cluster\" are both handled by **the same "
+"command**, so a freshly rebuilt cluster and a long-lived one both converge "
+"to the same declaration."
+
+#: src/concepts/design-philosophy.md:71
+msgid ""
+"`state` によって「いま何が入っているか」を持ち、`context_matches` で どのクラ"
+"スタに対する宣言なのかを縛ることで、 **「別のクラスタに間違って適用する」「適"
+"用したかどうか分からない」** を仕組みで防ぎます。"
+msgstr ""
+"By holding \"what is currently installed\" in `state` and pinning down "
+"which cluster a declaration belongs to via `context_matches`, Tazuna "
+"structurally prevents **\"applying to the wrong cluster by mistake\"** and "
+"**\"not knowing whether something has been applied.\"**"
+
+#: src/concepts/design-philosophy.md:74
+msgid ""
+"ブートストラップが終わったあとのアプリケーション運用は ArgoCD / Flux に渡しま"
+"す。 ここでイミュータブル運用のバトンがアプリケーションレイヤに引き継がれ、 "
+"**ブートストラップ層と継続的デリバリ層の両方** が宣言から再現可能になります。"
+msgstr ""
+"Once bootstrap is done, application operations are handed off to ArgoCD / "
+"Flux. The baton of immutable operation passes to the application layer, and "
+"**both the bootstrap layer and the continuous-delivery layer** become "
+"reproducible from declarations."
+
+#: src/concepts/design-philosophy.md:78
+msgid ""
+"なお Tazuna は「クラスタを毎回作り直して運用すること」を強制するわけではあり"
+"ません。 実際にイミュータブルに運用する（クラスタごと作り直して切り替える）ス"
+"タイルも 想定の中に入っていますが、より重視しているのは、その一歩手前の性質、"
+"すなわち **「Kubernetes クラスタが任意のタイミングで壊れたとしても、保証され"
+"た手順で 自動的に再構築できる」** 状態を常に保てることです。"
+msgstr ""
+"Note that Tazuna does not force you to actually rebuild the cluster every "
+"time. The strict immutable style — rebuilding and swapping entire clusters "
+"— is within scope, but what we care about more is the property one step "
+"before that: keeping the cluster in a state where **\"even if the "
+"Kubernetes cluster breaks at any moment, it can be rebuilt automatically by "
+"a guaranteed procedure.\"**"
+
+#: src/concepts/design-philosophy.md:84
+msgid "この性質さえあれば、"
+msgstr "With just this property in place, you can:"
+
+#: src/concepts/design-philosophy.md:86
+msgid "普段は同じクラスタを使い続けて運用する"
+msgstr "Keep using the same cluster for ordinary day-to-day operations"
+
+#: src/concepts/design-philosophy.md:87
+msgid ""
+"DR や大きなバージョンアップのタイミングだけ、別のクラスタを丸ごと立てて切り替"
+"える"
+msgstr ""
+"Only for DR or major version upgrades, stand up an entirely separate "
+"cluster and switch over to it"
+
+#: src/concepts/design-philosophy.md:88
+msgid "検証用の使い捨てクラスタを必要なときに立ち上げる"
+msgstr "Spin up throwaway clusters for verification whenever you need to"
+
+#: src/concepts/design-philosophy.md:90
+msgid "といった選択肢を **そのときの状況に応じて選べる** ようになります。"
+msgstr ""
+"— and **choose between these options based on the situation at hand**."
+
+#: src/concepts/design-philosophy.md:92
+msgid ""
+"Tazuna は、その「保証された再構築手順」を `tazuna.yaml` というコードと "
+"`tazuna apply` という一つのコマンドに集約することで、 イミュータブル運用を**"
+"選べる状態を維持し続ける** ための土台を提供します。"
+msgstr ""
+"By concentrating that \"guaranteed rebuild procedure\" into the code of "
+"`tazuna.yaml` and the single command `tazuna apply`, Tazuna provides the "
+"foundation for **continuously keeping immutable operation a viable choice**."
+
+#: src/concepts/design-philosophy.md:96
+msgid "Tazuna が肩代わりしないこと"
+msgstr "What Tazuna does not take on"
+
+#: src/concepts/design-philosophy.md:98
+msgid "意図的に踏み込まない領域もあります。"
+msgstr "There are areas Tazuna deliberately stays out of."
+
+#: src/concepts/design-philosophy.md:100
+msgid ""
+"**継続的デリバリ** — ArgoCD や Flux の代替ではありません。Tazuna の役目は、 "
+"そうしたツールをクラスタに **入れるまで** です。入ったあとは ArgoCD/Flux に渡"
+"します。"
+msgstr ""
+"**Continuous delivery** — Tazuna is not a replacement for ArgoCD or Flux. "
+"Its job ends at **getting those tools into the cluster**; from there, it "
+"hands off to ArgoCD/Flux."
+
+#: src/concepts/design-philosophy.md:102
+msgid ""
+"**マニフェストの中身を書く** — kustomize の overlay、helmfile の構成、Helm "
+"chart の値は、 既存の各ツールの作法で書きます。Tazuna はそれらを **呼び出して"
+"結果をクラスタへ流す** だけです。"
+msgstr ""
+"**Authoring the manifests themselves** — kustomize overlays, helmfile "
+"compositions, and Helm chart values are written in each tool's own "
+"idiomatic style. Tazuna only **invokes those tools and pushes the result "
+"into the cluster**."
+
+#: src/concepts/design-philosophy.md:104
+msgid ""
+"**コントロールプレーンの作成** — `kubeadm` / `kops` / マネージドサービスのク"
+"ラスタ自体は前提です。 Tazuna は `kubeconfig` を介して既存クラスタへ接続しま"
+"す。"
+msgstr ""
+"**Creating the control plane** — the cluster itself, built via `kubeadm` / "
+"`kops` / a managed service, is assumed to already exist. Tazuna connects to "
+"that existing cluster via `kubeconfig`."
+
+#: src/concepts/design-philosophy.md:106
+msgid ""
+"**Secret 管理基盤そのもの** — Secret の格納先の参照を宣言しますが、 Tazuna 自"
+"身は秘密を保管しません。"
+msgstr ""
+"**The secret management backend itself** — Tazuna declares references to "
+"where secrets are stored, but does not store the secrets itself."
+
+#: src/concepts/design-philosophy.md:108
+msgid ""
+"**GitOps のロールバック・履歴管理** — `state` は「いま何が入っているか」を表"
+"すもので、 歴史的なバージョン管理は git に任せます。"
+msgstr ""
+"**GitOps rollbacks and history management** — `state` represents \"what is "
+"currently installed,\" and historical version control is left to git."
+
+#: src/concepts/design-philosophy.md:111
+msgid "想定ユースケース"
+msgstr "Intended use cases"
+
+#: src/concepts/design-philosophy.md:113
+msgid "具体的に Tazuna が嬉しい場面はおおむね次のようなときです。"
+msgstr "Concretely, Tazuna shines in roughly the following situations."
+
+#: src/concepts/design-philosophy.md:115
+msgid ""
+"**新規クラスタを立ち上げる初日** — `tazuna apply` 1 発で、 CNI からデプロイ基"
+"盤までを所定の順序で入れたい。"
+msgstr ""
+"**Day one of bringing up a new cluster** — when you want to install "
+"everything from CNI to the deployment platform in the prescribed order with "
+"a single `tazuna apply`."
+
+#: src/concepts/design-philosophy.md:117
+msgid "Kubernetesクラスタの構築手順が妥当であることを自動検証する"
+msgstr ""
+"Automatically verifying that a Kubernetes cluster build procedure is sound."
+
+#: src/concepts/design-philosophy.md:118
+msgid ""
+"**同じ役割のクラスタを複数立てる** — staging / production / dr といった 類似"
+"クラスタを、ほぼ同じ `tazuna.yaml` で立ち上げたい。"
+msgstr ""
+"**Standing up multiple clusters with the same role** — when you want to "
+"bring up similar clusters such as staging / production / dr from nearly the "
+"same `tazuna.yaml`."
+
+#: src/concepts/design-philosophy.md:121
+msgid ""
+"次は [全体アーキテクチャ](./architecture.md) で、これらをどんな部品で実現して"
+"いるかを見ます。"
+msgstr ""
+"Next, in [Overall Architecture](./architecture.md), we look at the "
+"components that make this happen."
+
+#: src/concepts/architecture.md:3
+msgid ""
+"このページでは Tazuna を構成する主なコンポーネントと、 それらが `tazuna "
+"apply` のときにどう協調するかを俯瞰します。"
+msgstr ""
+"This page gives an overview of the main components that make up Tazuna and "
+"how they cooperate during `tazuna apply`."
+
+#: src/concepts/architecture.md:6
+msgid ""
+"ここでは責務の境界だけを扱います。具体的なディレクトリ構成や Go パッケージの"
+"分割方針は意図的に触れません。"
+msgstr ""
+"We only cover responsibility boundaries here. Concrete directory layouts "
+"and Go package split policies are intentionally out of scope."
+
+#: src/concepts/architecture.md:9
+msgid "レイヤ図"
+msgstr "Layer diagram"
+
+#: src/concepts/architecture.md:11
+msgid "おおまかには次の 3 層構造です。"
+msgstr "Roughly speaking, Tazuna has a three-layer structure:"
+
+#: src/concepts/architecture.md:45
+msgid ""
+"各 manifest は **1 つの Manager** を介してクラスタに反映されます。 適用前後の"
+"検証は **Test plugin** に切り出されており、 manifest 単位でも tazuna.yaml 全"
+"体でも実行できます。"
+msgstr ""
+"Each manifest is reflected into the cluster via **a single Manager**. Pre/"
+"post-apply verification is factored out into the **Test plugin**, which can "
+"run per manifest or for the entire `tazuna.yaml`."
+
+#: src/concepts/architecture.md:49
+msgid "主要コンポーネント"
+msgstr "Main components"
+
+#: src/concepts/architecture.md:51
+msgid ""
+"Tazuna は内部的に次のコンポーネントが組み合わさって動きます。 ここでは各コン"
+"ポーネントが「何を入力に取り、何を出力するか」という責務だけを示します。"
+msgstr ""
+"Internally, Tazuna works by combining the components below. We only "
+"describe each component's responsibility — \"what it takes as input and "
+"what it produces as output.\""
+
+#: src/concepts/architecture.md:54
+msgid "CLI"
+msgstr "CLI"
+
+#: src/concepts/architecture.md:56
+msgid ""
+"サブコマンド（`apply`, `build`, `check`, `destroy`, `state list`, `state "
+"diff`, `state sync`, `secret-to-genesissecret`, `version` など）の入り口で"
+"す。 フラグの解釈と Runner の組み立てだけを担当し、ロジック自体は持ちません。"
+msgstr ""
+"The entry point for subcommands such as `apply`, `build`, `check`, "
+"`destroy`, `state list`, `state diff`, `state sync`, `secret-to-"
+"genesissecret`, and `version`. It only parses flags and wires up the "
+"Runner; it holds no logic of its own."
+
+#: src/concepts/architecture.md:60 src/concepts/glossary.md:26
+msgid "Runner"
+msgstr "Runner"
+
+#: src/concepts/architecture.md:62
+msgid "Tazuna 全体のオーケストレータです。次を担当します。"
+msgstr ""
+"The orchestrator for Tazuna as a whole. It is responsible for the following:"
+
+#: src/concepts/architecture.md:64
+msgid "`tazuna.yaml` のロード"
+msgstr "Loading `tazuna.yaml`"
+
+#: src/concepts/architecture.md:65
+msgid "`includes` の展開"
+msgstr "Expanding `includes`"
+
+#: src/concepts/architecture.md:66
+msgid "`tazuna.yaml` 起点の相対パスを実行時パスへの変換"
+msgstr ""
+"Converting paths relative to `tazuna.yaml` into runtime paths"
+
+#: src/concepts/architecture.md:67
+msgid "`--tags` によるフィルタ"
+msgstr "Filtering by `--tags`"
+
+#: src/concepts/architecture.md:68
+msgid "各 manifest を対応する Manager へ渡す"
+msgstr "Dispatching each manifest to its corresponding Manager"
+
+#: src/concepts/architecture.md:69
+msgid "適用後の Test plugin の実行"
+msgstr "Running Test plugins after apply"
+
+#: src/concepts/architecture.md:71
+msgid ""
+"Runner は manifest type の種類を知りません。 「どの type に対してどの "
+"Manager を使うか」というマップだけを持ち、 それ以外は Manager 側に委ねます。"
+msgstr ""
+"The Runner does not know about the individual manifest types. It only "
+"holds a map of \"which Manager to use for which type\" and delegates "
+"everything else to the Manager."
+
+#: src/concepts/architecture.md:75 src/concepts/glossary.md:21
+msgid "Manager"
+msgstr "Manager"
+
+#: src/concepts/architecture.md:77
+msgid ""
+"manifest type ごとの「実際の適用方法」を実装するコンポーネントです。 すべて"
+"の Manager は次の 3 つの操作を提供します。"
+msgstr ""
+"A component that implements the \"actual way to apply\" for each manifest "
+"type. Every Manager exposes the following three operations:"
+
+#: src/concepts/architecture.md:80
+msgid "**Apply** — その manifest をクラスタへ反映する"
+msgstr "**Apply** — reflect that manifest into the cluster"
+
+#: src/concepts/architecture.md:81
+msgid "**Destroy** — その manifest が入れたものをクラスタから取り除く"
+msgstr ""
+"**Destroy** — remove from the cluster what that manifest installed"
+
+#: src/concepts/architecture.md:82
+msgid "**Build** — クラスタには触らず、適用したら何が入るかだけを生成する"
+msgstr ""
+"**Build** — generate only what *would* be installed if applied, without "
+"touching the cluster"
+
+#: src/concepts/architecture.md:84
+msgid ""
+"Runner はこの 3 操作だけを介して manifest type を均一に扱います。 個別のバッ"
+"クエンドの責務分担は [リファレンス](../reference/index.md) を参照してくださ"
+"い。"
+msgstr ""
+"The Runner treats all manifest types uniformly through just these three "
+"operations. For the responsibility split of each individual backend, see "
+"the [Reference](../reference/index.md)."
+
+#: src/concepts/architecture.md:87
+msgid "Validator"
+msgstr "Validator"
+
+#: src/concepts/architecture.md:89
+msgid ""
+"`tazuna.yaml` のロード直後に走るスキーマ・パス整合性検証です。 `apply` も "
+"`check` も最初にここを通り、不正な YAML や 存在しない `path` を **クラスタに"
+"触る前に** 弾きます。"
+msgstr ""
+"Schema and path-consistency validation that runs immediately after loading "
+"`tazuna.yaml`. Both `apply` and `check` go through this first, rejecting "
+"malformed YAML or non-existent `path`s **before touching the cluster**."
+
+#: src/concepts/architecture.md:93
+msgid "Context guard"
+msgstr "Context guard"
+
+#: src/concepts/architecture.md:95
+msgid ""
+"`tazuna.yaml` の `context_matches` を読み、現在の kubeconfig context 名が そ"
+"のパターン（複数の正規表現）に合致しているかを検証します。 合致しなければ "
+"apply / destroy はここで終了し、クラスタには一切触れません。"
+msgstr ""
+"Reads `context_matches` from `tazuna.yaml` and verifies that the current "
+"kubeconfig context name matches those patterns (a list of regular "
+"expressions). If it does not match, `apply` / `destroy` stops here and "
+"never touches the cluster."
+
+#: src/concepts/architecture.md:99
+msgid "State store"
+msgstr "State store"
+
+#: src/concepts/architecture.md:101
+msgid ""
+"Tazuna が「自分が入れたリソースの指紋」をクラスタに記録するための仕組みで"
+"す。 保存先はクラスタ内の ConfigMap で、`state list` / `state diff` / `state "
+"sync` は ここを起点に動きます。"
+msgstr ""
+"The mechanism Tazuna uses to record \"fingerprints of the resources it "
+"installed\" inside the cluster. The storage is an in-cluster ConfigMap; "
+"`state list` / `state diff` / `state sync` all operate against it."
+
+#: src/concepts/architecture.md:105
+msgid "Secret provider"
+msgstr "Secret provider"
+
+#: src/concepts/architecture.md:107
+msgid ""
+"`GenesisSecret` および helmfile の `vars.op` から参照される、 「シークレット"
+"の取得元」を抽象化したコンポーネントです。 現状は 1Password 向けの実装が組み"
+"込まれています。"
+msgstr ""
+"A component that abstracts the \"source of secret values\" referenced by "
+"`GenesisSecret` and helmfile's `vars.op`. Currently, a 1Password "
+"implementation is bundled."
+
+#: src/concepts/architecture.md:111 src/concepts/glossary.md:30
+msgid "Test plugin"
+msgstr "Test plugin"
+
+#: src/concepts/architecture.md:113
+msgid ""
+"manifest 適用後（または `tazuna.yaml` 全体の適用後）に走らせる検証の仕組みで"
+"す。 組み込みで次の 2 種が利用できます。"
+msgstr ""
+"A verification mechanism that runs after a manifest is applied (or after "
+"the entire `tazuna.yaml` is applied). The following two kinds are available "
+"out of the box:"
+
+#: src/concepts/architecture.md:116
+msgid "`wait-until` — 指定リソースが存在 / Ready / Available になるまで待つ"
+msgstr ""
+"`wait-until` — wait until the specified resource exists, becomes Ready, or "
+"becomes Available"
+
+#: src/concepts/architecture.md:117
+msgid "`exist-nonexist` — 指定リソースが存在 / 非在 であるべきことを表明する"
+msgstr ""
+"`exist-nonexist` — assert that the specified resource should be present or "
+"absent"
+
+#: src/concepts/architecture.md:119
+msgid "Hint"
+msgstr "Hint"
+
+#: src/concepts/architecture.md:121
+msgid ""
+"helmfile の `vars` が取りうる値の型・フォーマット （hostname / URL / email / "
+"IP / CIDR / UUID / semver / datetime など）を 宣言的に検証するための補助コン"
+"ポーネントです。"
+msgstr ""
+"An auxiliary component for declaratively validating the type and format of "
+"values that helmfile's `vars` may take — hostname, URL, email, IP, CIDR, "
+"UUID, semver, datetime, and so on."
+
+#: src/concepts/architecture.md:125
+msgid "Prompt"
+msgstr "Prompt"
+
+#: src/concepts/architecture.md:127
+msgid ""
+"破壊的操作の Yes/No 確認といった対話 I/O を抽象化するコンポーネントです。 非"
+"対話モードやテスト時に振る舞いを差し替えるためのものです。"
+msgstr ""
+"A component that abstracts interactive I/O such as Yes/No confirmations for "
+"destructive operations. It exists so that the behavior can be swapped out "
+"in non-interactive mode or during tests."
+
+#: src/concepts/architecture.md:130
+msgid "`tazuna apply` のときの流れ"
+msgstr "Flow during `tazuna apply`"
+
+#: src/concepts/architecture.md:132
+msgid "ここでは「どのコンポーネントが何をするか」の観点で並べておきます。"
+msgstr ""
+"Here the steps are laid out from the angle of \"which component does what.\""
+
+#: src/concepts/architecture.md:134
+msgid "**CLI** がフラグを解釈し、Runner を組み立てる。"
+msgstr "**CLI** parses flags and wires up the Runner."
+
+#: src/concepts/architecture.md:135
+msgid ""
+"**Validator** が `tazuna.yaml` を読み、スキーマと `path` の存在を検証する。"
+msgstr ""
+"**Validator** reads `tazuna.yaml` and verifies the schema and the existence "
+"of `path`s."
+
+#: src/concepts/architecture.md:136
+msgid ""
+"`spec.context_matches` があれば **Context guard** が kubeconfig を検証する。"
+msgstr ""
+"If `spec.context_matches` is present, the **Context guard** verifies the "
+"kubeconfig."
+
+#: src/concepts/architecture.md:137
+msgid ""
+"**Runner** が `includes` を展開し、`manifests[].path` を実行時パスへ変換す"
+"る。"
+msgstr ""
+"**Runner** expands `includes` and converts `manifests[].path` into runtime "
+"paths."
+
+#: src/concepts/architecture.md:138
+msgid ""
+"`manifests` を順に走査し、`--tags` で除外されないものを 対応する **Manager** "
+"に渡す。"
+msgstr ""
+"It walks `manifests` in order and hands each one that is not filtered out "
+"by `--tags` to the corresponding **Manager**."
+
+#: src/concepts/architecture.md:140
+msgid ""
+"各 Manager は内部で kustomize / helmfile / oras pull / 1Password 取得 などを"
+"呼び出し、 結果をクラスタへ反映する。State store に指紋が書き込まれるのもこ"
+"こ。"
+msgstr ""
+"Each Manager internally invokes kustomize, helmfile, `oras pull`, 1Password "
+"retrieval, and so on, and reflects the result into the cluster. The "
+"fingerprint is also written to the State store at this point."
+
+#: src/concepts/architecture.md:142
+msgid "manifest 単位 / 全体の Tests があれば **Test plugin** が走る。"
+msgstr ""
+"If there are per-manifest or whole-file Tests, the **Test plugin** runs."
+
+#: src/concepts/architecture.md:144
+msgid ""
+"`tazuna state sync` はこの 1〜4 までを使ったうえで、 各 Manager の `Build` 結"
+"果から **State diff** を組み、追加分・変更分だけを apply します。"
+msgstr ""
+"`tazuna state sync` reuses steps 1–4 above, builds a **State diff** from "
+"each Manager's `Build` result, and applies only the added or changed "
+"entries."
+
+#: src/concepts/glossary.md:3
+msgid ""
+"このセクションで頻出する用語の定義をまとめます。 より詳しい仕様は [リファレン"
+"ス](../reference/index.md) を参照してください。"
+msgstr ""
+"This page collects definitions for terms that come up frequently in this "
+"section. For more detailed specifications, see the "
+"[Reference](../reference/index.md)."
+
+#: src/concepts/glossary.md:6
+msgid "Tazuna 固有の用語"
+msgstr "Tazuna-specific terms"
+
+#: src/concepts/glossary.md:8
+msgid "tazuna.yaml"
+msgstr "tazuna.yaml"
+
+#: src/concepts/glossary.md:9
+msgid ""
+"Tazuna に対する唯一の入力ファイル。`apiVersion: tazuna.pepabo.com/v1`, "
+"`kind: Tazuna` を持ち、`spec.manifests[]` に「適用したい manifest 群」を宣言"
+"する。"
+msgstr ""
+"The single input file given to Tazuna. It carries `apiVersion: "
+"tazuna.pepabo.com/v1` and `kind: Tazuna`, and declares the \"manifests to "
+"be applied\" in `spec.manifests[]`."
+
+#: src/concepts/glossary.md:12
+msgid "Manifest"
+msgstr "Manifest"
+
+#: src/concepts/glossary.md:13
+msgid ""
+"`tazuna.yaml` 内の `manifests[]` の 1 エントリのこと。 `name` / `type` / "
+"`path` を持ち、`type` ごとに対応する Manager が処理する。 Kubernetes における"
+"「マニフェスト」（YAML ファイル）とは指す対象が違う点に注意。"
+msgstr ""
+"A single entry in `manifests[]` inside `tazuna.yaml`. It has `name` / "
+"`type` / `path`, and is processed by the Manager corresponding to its "
+"`type`. Note that what this refers to is different from \"manifest\" in the "
+"Kubernetes sense (a YAML file)."
+
+#: src/concepts/glossary.md:17
+msgid "Manifest type"
+msgstr "Manifest type"
+
+#: src/concepts/glossary.md:18
+msgid ""
+"Manifest の処理方法を指定する文字列。 `kustomize` / `helmfile` / "
+"`genesissecret` / `parallel` / `oras` の 5 種類。"
+msgstr ""
+"A string that specifies how a manifest is processed. There are five types: "
+"`kustomize`, `helmfile`, `genesissecret`, `parallel`, and `oras`."
+
+#: src/concepts/glossary.md:22
+msgid ""
+"ある Manifest type に対する処理を担うコンポーネント。 `Apply`（クラスタへの反"
+"映）/ `Destroy`（取り外し）/ `Build`（クラスタに触らない生成）の 3 つの操作を"
+"提供し、Runner はこの 3 つを介してすべての backend を均一に扱う。"
+msgstr ""
+"A component that handles processing for a given manifest type. It provides "
+"three operations — `Apply` (reflect into the cluster), `Destroy` (remove), "
+"and `Build` (generate without touching the cluster) — and the Runner uses "
+"just these three to treat all backends uniformly."
+
+#: src/concepts/glossary.md:27
+msgid ""
+"Tazuna の中心オーケストレータ。`tazuna.yaml` のロード、`includes` 展開、`--"
+"tags` フィルタ、 Manager の呼び出し、Test plugin の起動などをまとめて担当す"
+"る。"
+msgstr ""
+"The central orchestrator of Tazuna. It is responsible for loading "
+"`tazuna.yaml`, expanding `includes`, filtering by `--tags`, invoking "
+"Managers, and launching Test plugins."
+
+#: src/concepts/glossary.md:31
+msgid ""
+"Manifest 適用の前後で行いたい検証を表現する仕組み。 組み込みで `wait-until`"
+"（Ready/存在まで待つ）と `exist-nonexist`（存在/非在の表明）がある。 "
+"`spec.manifests[].tests` か `spec.tests` に書く。"
+msgstr ""
+"A mechanism for expressing verifications you want to run before or after "
+"applying a manifest. The built-in plugins are `wait-until` (wait until "
+"Ready/present) and `exist-nonexist` (assert presence/absence). They are "
+"written under `spec.manifests[].tests` or `spec.tests`."
+
+#: src/concepts/glossary.md:35
+msgid "State"
+msgstr "State"
+
+#: src/concepts/glossary.md:36
+msgid ""
+"Tazuna が「自分が入れたリソース」を追跡するための記録。 クラスタ内 `tazuna` "
+"namespace の ConfigMap (`tazuna-state-<manifest-name>`) に保存される。"
+msgstr ""
+"The record Tazuna uses to track \"the resources it installed itself.\" It "
+"is stored in ConfigMaps under the in-cluster `tazuna` namespace (`tazuna-"
+"state-<manifest-name>`)."
+
+#: src/concepts/glossary.md:39
+msgid "State key"
+msgstr "State key"
+
+#: src/concepts/glossary.md:40
+msgid ""
+"State の 1 エントリを指すキー文字列。 namespaced なら `{manifest}/{group}/"
+"{version}/{kind}/{namespace}/{name}`、 cluster-scoped なら `{manifest}/"
+"{group}/{version}/{kind}/{name}`。"
+msgstr ""
+"The key string that identifies a single State entry. For namespaced "
+"resources it is `{manifest}/{group}/{version}/{kind}/{namespace}/{name}`; "
+"for cluster-scoped resources, `{manifest}/{group}/{version}/{kind}/{name}`."
+
+#: src/concepts/glossary.md:44
+msgid "ContentHash"
+msgstr "ContentHash"
+
+#: src/concepts/glossary.md:45
+msgid ""
+"State の各エントリが持つ SHA-256 ハッシュ値。 リソース YAML から "
+"`metadata.resourceVersion` / `uid` / `creationTimestamp` / `generation` / "
+"`managedFields` / `selfLink` と `status` を除いて計算する。 このハッシュの一"
+"致／不一致が `state diff` の判定基準。"
+msgstr ""
+"The SHA-256 hash value carried by each State entry. It is computed over the "
+"resource YAML with `metadata.resourceVersion`, `uid`, `creationTimestamp`, "
+"`generation`, `managedFields`, `selfLink`, and `status` excluded. Whether "
+"this hash matches or not is the decision criterion for `state diff`."
+
+#: src/concepts/glossary.md:50
+msgid "Diff type"
+msgstr "Diff type"
+
+#: src/concepts/glossary.md:51
+msgid ""
+"`tazuna state diff` がリソースごとに付ける分類。 `added` / `modified` / "
+"`removed` / `always-sync` の 4 種類。"
+msgstr ""
+"The classification `tazuna state diff` assigns to each resource. There are "
+"four types: `added`, `modified`, `removed`, and `always-sync`."
+
+#: src/concepts/glossary.md:54
+msgid "always-sync"
+msgstr "always-sync"
+
+#: src/concepts/glossary.md:55
+msgid ""
+"GenesisSecret 由来 Secret のように、差分計算をスキップして毎回同期する扱いの "
+"Diff type。 ContentHash で変化を判定できない / させない対象に使う。"
+msgstr ""
+"A Diff type for entries that skip diff computation and are synchronized "
+"every time, such as Secrets derived from `GenesisSecret`. Used for targets "
+"where changes cannot or should not be judged by `ContentHash`."
+
+#: src/concepts/glossary.md:58
+msgid "GenesisSecret"
+msgstr "GenesisSecret"
+
+#: src/concepts/glossary.md:59
+msgid ""
+"1Password に保管された秘密情報から、Kubernetes Secret を **生成** するための"
+"宣言。 Kubernetes CRD ではなく、Tazuna が読む YAML スキーマ。 `type: "
+"genesissecret` の manifest として `tazuna.yaml` から参照する。"
+msgstr ""
+"A declaration for **generating** Kubernetes Secrets from secret values "
+"stored in 1Password. It is not a Kubernetes CRD but a YAML schema that "
+"Tazuna reads. It is referenced from `tazuna.yaml` as a manifest with `type: "
+"genesissecret`."
+
+#: src/concepts/glossary.md:63
+msgid "Provider (SecretProvider)"
+msgstr "Provider (SecretProvider)"
+
+#: src/concepts/glossary.md:64
+msgid ""
+"GenesisSecret が秘匿情報を取り出す元を抽象化したインターフェース。 現状は "
+"1Password (`op`) 向けの実装が組み込まれている。"
+msgstr ""
+"The interface that abstracts the source from which `GenesisSecret` pulls "
+"secret values. Currently, an implementation for 1Password (`op`) is bundled."
+
+#: src/concepts/glossary.md:67
+msgid "`context_matches`"
+msgstr "`context_matches`"
+
+#: src/concepts/glossary.md:68
+msgid ""
+"`tazuna.yaml` の `spec.context_matches`。 現在の kubeconfig context 名がマッ"
+"チすべき正規表現の配列で、 誤クラスタへの apply を防ぐためのガード。"
+msgstr ""
+"`spec.context_matches` in `tazuna.yaml`. An array of regular expressions "
+"the current kubeconfig context name must match — a guard against applying "
+"to the wrong cluster."
+
+#: src/concepts/glossary.md:72
+msgid "`context_match_mode`"
+msgstr "`context_match_mode`"
+
+#: src/concepts/glossary.md:73
+msgid "`context_matches` の評価方式。`or`（デフォルト）または `and`。"
+msgstr ""
+"The evaluation mode for `context_matches`: `or` (the default) or `and`."
+
+#: src/concepts/glossary.md:75
+msgid "includes"
+msgstr "includes"
+
+#: src/concepts/glossary.md:76
+msgid ""
+"`manifests[]` のエントリで、別ファイルの `tazuna.yaml` を読み込み、 その "
+"`manifests[]` を展開するための仕組み。ネストは不可。"
+msgstr ""
+"A `manifests[]` entry that loads another `tazuna.yaml` file and expands its "
+"`manifests[]` inline. Nesting is not allowed."
+
+#: src/concepts/glossary.md:79
+msgid "Tag (manifest tag)"
+msgstr "Tag (manifest tag)"
+
+#: src/concepts/glossary.md:80
+msgid ""
+"`manifests[].tags` に書く文字列。`tazuna apply --tags foo,bar` のように 適用"
+"対象を絞り込むときに使う。複数タグは **OR** で評価される。"
+msgstr ""
+"A string written under `manifests[].tags`. Used to narrow down what gets "
+"applied, e.g. `tazuna apply --tags foo,bar`. Multiple tags are evaluated as "
+"an **OR**."
+
+#: src/concepts/glossary.md:83
+msgid "Manifest path"
+msgstr "Manifest path"
+
+#: src/concepts/glossary.md:84
+msgid ""
+"`manifests[].path`。`tazuna.yaml` 自身の置かれているディレクトリ起点の相対パ"
+"スとして書く。 Tazuna は実行時に cwd 起点へ変換する。"
+msgstr ""
+"`manifests[].path`. Written as a path relative to the directory containing "
+"`tazuna.yaml` itself. Tazuna converts it into a path relative to the "
+"current working directory at runtime."
+
+#: src/concepts/glossary.md:87
+msgid "`tazuna.hint.yaml`"
+msgstr "`tazuna.hint.yaml`"
+
+#: src/concepts/glossary.md:88
+msgid ""
+"helmfile の `vars` が取りうる値の型・フォーマット制約を宣言するヒントファイ"
+"ル。 `pkg/hint/` で読まれる。"
+msgstr ""
+"A hint file that declares the type and format constraints on values that "
+"helmfile's `vars` may take. It is read by `pkg/hint/`."
+
+#: src/concepts/glossary.md:91
+msgid "Kubernetes 側の用語（補足）"
+msgstr "Kubernetes terms (supplementary)"
+
+#: src/concepts/glossary.md:93
+msgid ""
+"ここに挙げるのは Tazuna 内で頻出する Kubernetes 標準用語の短い定義です。"
+msgstr ""
+"Below are short definitions of standard Kubernetes terms that come up "
+"frequently within Tazuna."
+
+#: src/concepts/glossary.md:95
+msgid "kubeconfig"
+msgstr "kubeconfig"
+
+#: src/concepts/glossary.md:96
+msgid ""
+"クラスタ接続情報（cluster / user / context）をまとめた YAML。 Tazuna はここか"
+"ら `current-context` を読み、そのクラスタへ操作を行う。"
+msgstr ""
+"A YAML file that bundles cluster connection information (cluster / user / "
+"context). Tazuna reads `current-context` from it and operates against the "
+"corresponding cluster."
+
+#: src/concepts/glossary.md:99
+msgid "context (kubeconfig context)"
+msgstr "context (kubeconfig context)"
+
+#: src/concepts/glossary.md:100
+msgid ""
+"「どの cluster にどの user で繋ぐか」を 1 名前にまとめた kubeconfig の要素。 "
+"`context_matches` が正規表現でチェックするのはこの context 名。"
+msgstr ""
+"A kubeconfig element that combines \"which user connects to which cluster\" "
+"under a single name. The context name is what `context_matches` checks with "
+"its regular expressions."
+
+#: src/concepts/glossary.md:103
+msgid "GVK (Group/Version/Kind)"
+msgstr "GVK (Group/Version/Kind)"
+
+#: src/concepts/glossary.md:104
+msgid ""
+"Kubernetes リソースの種別を一意に特定する 3 つ組。 Tazuna の State key も "
+"GVK を含む。"
+msgstr ""
+"The three-tuple that uniquely identifies a Kubernetes resource kind. "
+"Tazuna's State key also includes the GVK."
+
+#: src/concepts/glossary.md:107
+msgid "namespaced / cluster-scoped"
+msgstr "namespaced / cluster-scoped"
+
+#: src/concepts/glossary.md:108
+msgid ""
+"リソースが namespace に属するか属さないか。 State key の長さ（5 パートか 6 "
+"パート）に反映される。"
+msgstr ""
+"Whether a resource belongs to a namespace or not. This is reflected in the "
+"length of the State key (5 parts or 6 parts)."
+
+#: src/concepts/glossary.md:111
+msgid "ConfigMap"
+msgstr "ConfigMap"
+
+#: src/concepts/glossary.md:112
+msgid ""
+"任意の key-value をクラスタに保存するための組み込みリソース。 Tazuna の "
+"State の保存先として使われる。"
+msgstr ""
+"A built-in resource for storing arbitrary key-value data in the cluster. "
+"Used as the storage location for Tazuna's State."
+
+#: src/concepts/glossary.md:115
+msgid "外部ツール"
+msgstr "External tools"
+
+#: src/concepts/glossary.md:117
+msgid "kustomize"
+msgstr "kustomize"
+
+#: src/concepts/glossary.md:118
+msgid ""
+"Kubernetes manifest の overlay / patch 機構。 `type: kustomize` の Manager か"
+"ら呼び出される。"
+msgstr ""
+"An overlay/patch mechanism for Kubernetes manifests. Invoked from the "
+"`type: kustomize` Manager."
+
+#: src/concepts/glossary.md:121
+msgid "helmfile"
+msgstr "helmfile"
+
+#: src/concepts/glossary.md:122
+msgid ""
+"複数の Helm release を 1 YAML から束ねるツール。 `type: helmfile` の Manager "
+"から呼び出される。"
+msgstr ""
+"A tool that bundles multiple Helm releases from a single YAML. Invoked from "
+"the `type: helmfile` Manager."
+
+#: src/concepts/glossary.md:125
+msgid "Helm"
+msgstr "Helm"
+
+#: src/concepts/glossary.md:126
+msgid "Helm chart を扱うパッケージマネージャ。helmfile から内部的に使われる。"
+msgstr ""
+"The package manager for Helm charts. Used internally by helmfile."
+
+#: src/concepts/glossary.md:128
+msgid "ORAS / OCI artifact"
+msgstr "ORAS / OCI artifact"
+
+#: src/concepts/glossary.md:129
+msgid ""
+"OCI registry に Kubernetes manifest のようなコンテナ以外の成果物を置く規格。 "
+"`type: oras` で pull し、`delegate` に指定した helmfile / kustomize に処理を"
+"委譲する。"
+msgstr ""
+"A standard for storing non-container artifacts — such as Kubernetes "
+"manifests — in an OCI registry. `type: oras` pulls them, then delegates "
+"processing to the helmfile or kustomize specified in `delegate`."
+
+#: src/concepts/glossary.md:132
+msgid "1Password"
+msgstr "1Password"
+
+#: src/concepts/glossary.md:133
+msgid ""
+"Tazuna が `GenesisSecret` や `helmfile.vars.op` で参照する Secret の格納先。 "
+"取得は `op` コマンド経由。"
+msgstr ""
+"The secret storage that Tazuna references from `GenesisSecret` and "
+"`helmfile.vars.op`. Retrieval is done via the `op` command."
+
+#: src/guides/index.md:3
+msgid "TODO: タスク志向のガイドを追加する。"
+msgstr "TODO: Add task-oriented guides."
+
+#: src/operations/index.md:3
+msgid "TODO: 運用ガイダンスを追加する。"
+msgstr "TODO: Add operational guidance."
+
+#: src/reference/index.md:3
+msgid "TODO: リファレンス資料を追加する。"
+msgstr "TODO: Add reference material."
+
+#: src/contributing/index.md:3
+msgid "TODO: コントリビューションガイドラインを追加する。"
+msgstr "TODO: Add contribution guidelines."
