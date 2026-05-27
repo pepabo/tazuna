@@ -68,7 +68,6 @@ Examples:
 }
 
 func init() {
-	buildCmd.Flags().String("cluster-name", "kind-tazuna", "cluster name")
 	addTagsFlag(buildCmd, "Filter manifests by tag; only matching tags are built")
 	addORASPullFlags(buildCmd)
 	rootCmd.AddCommand(buildCmd)
