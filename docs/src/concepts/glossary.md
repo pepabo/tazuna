@@ -54,6 +54,11 @@ State の各エントリが持つ SHA-256 ハッシュ値。
 ### always-sync
 GenesisSecret 由来 Secret のように、差分計算をスキップして毎回同期する扱いの Diff type。
 ContentHash で変化を判定できない / させない対象に使う。
+1Password 側で値が更新されてもクラスタ側のハッシュは変わらないため、
+ContentHash を使わずに毎回 Provider に問い合わせる形で同期する設計になっている。
+利用例と運用上の扱いは
+[GenesisSecret スキーマ - State と always-sync](../reference/genesis-secret.md#state-と-always-sync)
+と [Drift モニタリング](../operations/drift-monitoring.md) を参照。
 
 ### GenesisSecret
 1Password に保管された秘密情報から、Kubernetes Secret を **生成** するための宣言。
