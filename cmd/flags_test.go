@@ -71,7 +71,6 @@ func TestSubcommandFlags(t *testing.T) {
 		{
 			cmd: buildCmd,
 			flags: []flagSpec{
-				{name: "cluster-name", defaultVal: "kind-tazuna"},
 				{name: "tags", defaultVal: "[]"},
 				{name: "no-cache", defaultVal: "false"},
 				{name: "offline", defaultVal: "false"},

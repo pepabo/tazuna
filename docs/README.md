@@ -10,11 +10,11 @@ The published site lives at <https://pepabo.github.io/tazuna/>.
 ```
 docs/
 ├── book.toml          # mdBook configuration
-├── src/               # Source documents (authored in English)
+├── src/               # Source documents (authored in Japanese)
 │   ├── SUMMARY.md
 │   └── introduction.md
 ├── po/                # Translations
-│   └── ja.po          # Japanese
+│   └── en.po          # English
 ├── theme/
 │   └── fonts.css      # Font override (M PLUS U via Google Fonts)
 ├── static/
@@ -34,26 +34,26 @@ cargo install mdbook-i18n-helpers --locked
 
 ## Preview locally
 
-English (the source language):
+Japanese (the source language):
 
 ```sh
 cd docs
 mdbook serve --open
 ```
 
-Japanese:
+English:
 
 ```sh
 cd docs
-MDBOOK_BOOK__LANGUAGE=ja mdbook serve --open
+MDBOOK_BOOK__LANGUAGE=en mdbook serve --open
 ```
 
 ## Build locally
 
 ```sh
 cd docs
-mdbook build -d book/en
-MDBOOK_BOOK__LANGUAGE=ja mdbook build -d book/ja
+mdbook build -d book/ja
+MDBOOK_BOOK__LANGUAGE=en mdbook build -d book/en
 cp static/index.html book/index.html
 ```
 
@@ -67,10 +67,10 @@ After editing files under `src/`, refresh the PO template and merge:
 cd docs
 MDBOOK_OUTPUT__XGETTEXT__POT_FILE=messages.pot \
   mdbook build -d po --no-create-missing
-msgmerge --update po/ja.po po/messages.pot
+msgmerge --update po/en.po po/messages.pot
 ```
 
-Then open `po/ja.po` and translate the new `msgid` entries.
+Then open `po/en.po` and translate the new `msgid` entries.
 
 ## Deployment
 
