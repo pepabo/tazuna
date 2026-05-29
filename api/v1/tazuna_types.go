@@ -29,6 +29,12 @@ const (
 )
 
 type TazunaSpec struct {
+	// MinimumSupportedTazunaVersion はこの tazuna.yaml を処理するのに必要な
+	// tazuna バイナリの最小バージョンを semver 形式で宣言します（例: "1.4.0"）。
+	// 指定した場合、tazuna.yaml を読み込んだ任意の操作で、実行中の tazuna の
+	// バージョンがこの値を下回るとエラーで終了します。未指定なら制約はありません。
+	// 先頭の "v" は許容されます（"v1.4.0" も可）。
+	MinimumSupportedTazunaVersion string `json:"minimumSupportedTazunaVersion,omitempty"`
 	// ContextMatchesは現在のkubeconfigコンテキスト名がマッチすべき正規表現パターンのリストです
 	// 指定した場合、apply/destroy時にコンテキスト名がパターンにマッチしないとエラーになります
 	ContextMatches []string `json:"context_matches,omitempty"`
@@ -37,6 +43,10 @@ type TazunaSpec struct {
 	Manifests        []Manifest       `json:"manifests"`
 	// Testsはすべてのマニフェスト適用が終わったあとに実行されます
 	Tests []TestPluginSpec `json:"tests"`
+	// Providers は Secret provider の宣言リストです。未指定時は組み込みの "default-op"
+	// (1Password) のみが利用可能であり、これは GenesisSecret の .spec.provider が空文字
+	// だった場合の後方互換フォールバックとして利用されます。
+	Providers []ProviderConfig `json:"providers,omitempty"`
 }
 
 // IncludeFile はincludeするファイルを定義します
@@ -67,8 +77,14 @@ type Manifest struct {
 	Kustomize     *ManifestKustomize     `json:"kustomize,omitempty"`
 	GenesisSecret *ManifestGenesisSecret `json:"genesisSecret,omitempty"`
 	Helmfile      *ManifestHelmfile      `json:"helmfile,omitempty"`
-	Parallel      *ManifestParallel      `json:"parallel,omitempty"`
 	ORAS          *ManifestORAS          `json:"oras,omitempty"`
+	// DependsOn はこのマニフェスト適用前に完了している必要があるマニフェスト名のリスト。
+	// dependsOn に列挙された全マニフェストが apply 成功した後でのみ、このマニフェストの
+	// apply が開始される。同じ層に属するマニフェスト (依存関係上同じ深度) は並列に
+	// 適用される。dependsOn が tazuna.yaml 内で一度も使われていなければ従来通りの
+	// 宣言順・順次実行となるため後方互換性が保たれる。
+	// 自分自身の参照、未知のマニフェスト名、循環依存はいずれもバリデーションエラー。
+	DependsOn []string `json:"dependsOn,omitempty"`
 	// Testsはマニフェストapply後に行われる各種テストを記載します
 	Tests []TestPluginSpec `json:"tests"`
 }
@@ -79,7 +95,6 @@ const (
 	ManifestTypeKustomize     ManifestType = "kustomize"
 	ManifestTypeGenesisSecret ManifestType = "genesissecret"
 	ManifestTypeHelmfile      ManifestType = "helmfile"
-	ManifestTypeParallel      ManifestType = "parallel"
 	ManifestTypeORAS          ManifestType = "oras"
 )
 
@@ -130,9 +145,4 @@ type OnePasswordVaultSelector struct {
 	Vault string `json:"vault"` // 1PasswordのVault名
 	Item  string `json:"item"`  // 1PasswordのItem名
 	Field string `json:"field"` // 1PasswordのField名
-}
-
-type ManifestParallel struct {
-	// Childrenはマニフェストの子マニフェストを定義します
-	Children []Manifest `json:"children,omitempty"`
 }

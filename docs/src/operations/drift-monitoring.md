@@ -1,10 +1,25 @@
 # Drift モニタリング
 
-このページは、`tazuna state diff` を **定期的に回して drift を可視化する運用** の作り方をまとめます。
-コマンドの仕様は [`tazuna state diff`](../reference/cli/state-diff.md) を、
+このページは、`tazuna state diff` と `tazuna state drift` を **定期的に回して drift を
+可視化する運用** の作り方をまとめます。
+コマンドの仕様は [`tazuna state diff`](../reference/cli/state-diff.md) と
+[`tazuna state drift`](../reference/cli/state-drift.md) を、
 State の中身の仕様は [State の内部構造](../reference/state.md) を参照してください。
 
-## 何を drift と呼ぶか
+## 2 種類の drift
+
+Tazuna が見える drift には方向の違う 2 種類があります。
+
+| 名称               | 何の差か                                  | 検知に使うコマンド                                   |
+|--------------------|-------------------------------------------|------------------------------------------------------|
+| 宣言 drift         | `tazuna.yaml` から生成すべきリソース vs State | [`tazuna state diff`](../reference/cli/state-diff.md) |
+| ライブ drift       | State vs ライブクラスタの実体              | [`tazuna state drift`](../reference/cli/state-drift.md) |
+
+**宣言 drift** は「`tazuna.yaml` を更新したのに反映していない」「Manifest を外したのに
+クラスタには残っている」を捉えます。**ライブ drift** は「`tazuna.yaml` は変えていないのに、
+誰かが直接 `kubectl apply` した」「クラスタ側で手で消された」を捉えます。
+
+## 何を drift と呼ぶか（宣言 drift）
 
 ここでの drift は、`tazuna.yaml` から生成されるべきリソース集合（**Build 結果**）と、
 クラスタ内 State に記録されているリソース集合の差です。
@@ -104,7 +119,8 @@ fi
 
 drift が出たときの選択肢は次のいずれかです。
 
-- **意図した変更だった**: `tazuna apply`（または `tazuna state sync`）で State をクラスタに追従させる。
+- **意図した変更だった**: `tazuna apply`（`--sync` を付けると差分のみ反映）で State を
+  クラスタに追従させる。
 - **意図しない変更だった**:
   - **`modified`**: 誰がいつ変えたかを git log / クラスタの監査ログ等で追い、
     変更を巻き戻すか `tazuna.yaml` 側に取り込むかを判断する。
@@ -112,13 +128,35 @@ drift が出たときの選択肢は次のいずれかです。
     意図に合わせて apply するか、`tazuna.yaml` 側を元に戻す。
   - **`removed`**: Tazuna から Manifest を外したが、リソースはクラスタに残っている。
     [`tazuna destroy`](../reference/cli/destroy.md) の `--tags` 絞り込みや、
-    `tazuna state sync` + `TAZUNA_STATE_SYNC_DELETE=true` で片付ける。
+    `tazuna apply --sync --prune` で片付ける。
 - **GenesisSecret の `always-sync`**: drift ではないので通知から除外して構いません。
+
+## ライブ drift の検知
+
+`tazuna state diff` が「Build 結果 vs State」だけを見るのに対し、
+[`tazuna state drift`](../reference/cli/state-drift.md) は「State vs ライブクラスタ」を
+比較します。`tazuna.yaml` を変えていなくても、`kubectl apply` で手で書き換えられた
+リソースや、`kubectl delete` で消えたリソースが検知できます。
+
+```bash
+# 30 分ごとに live drift をチェックして Slack に投げる例
+if ! tazuna state drift -f tazuna.yaml | tee drift.txt | grep -q "No drift detected."; then
+  curl -X POST "$SLACK_WEBHOOK_URL" --data "$(jq -Rs '{text: .}' < drift.txt)"
+fi
+```
+
+出力分類は `live-drifted`（ハッシュ不一致）と `live-missing`（クラスタから消えている）の
+2 種類です。
+
+ライブ drift と宣言 drift を **両方** モニタリングするのが推奨構成です。前者は
+クラスタ運用者のオペレーションミスを、後者は GitOps パイプラインの reach の問題を、
+それぞれ別にあぶり出せます。
 
 ## 関連
 
 - コマンド仕様: [`tazuna state diff`](../reference/cli/state-diff.md) /
-  [`tazuna state sync`](../reference/cli/state-sync.md)
+  [`tazuna state drift`](../reference/cli/state-drift.md) /
+  [`tazuna apply`](../reference/cli/apply.md)
 - State の内部構造: [State の内部構造](../reference/state.md)
 - 用語: [Diff type](../concepts/glossary.md#diff-type) /
   [always-sync](../concepts/glossary.md#always-sync)

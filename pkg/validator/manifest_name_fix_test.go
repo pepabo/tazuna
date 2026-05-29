@@ -74,32 +74,6 @@ func TestFixManifestNames_DuplicateWithExisting(t *testing.T) {
 	}
 }
 
-func TestFixManifestNames_ParallelChildren(t *testing.T) {
-	manifests := []v1.Manifest{
-		{
-			Name: "parallel-step",
-			Type: v1.ManifestTypeParallel,
-			Path: "./parallel",
-			Parallel: &v1.ManifestParallel{
-				Children: []v1.Manifest{
-					{Type: v1.ManifestTypeKustomize, Path: "./child1"},
-					{Type: v1.ManifestTypeHelmfile, Path: "./child2"},
-				},
-			},
-		},
-	}
-
-	FixManifestNames(manifests)
-
-	children := manifests[0].Parallel.Children
-	if children[0].Name != "kustomize-child1" {
-		t.Errorf("expected kustomize-child1, got %s", children[0].Name)
-	}
-	if children[1].Name != "helmfile-child2" {
-		t.Errorf("expected helmfile-child2, got %s", children[1].Name)
-	}
-}
-
 func TestFixManifestNames_EmptyPath(t *testing.T) {
 	manifests := []v1.Manifest{
 		{Type: v1.ManifestTypeKustomize, Path: "."},

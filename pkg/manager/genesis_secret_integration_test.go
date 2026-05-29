@@ -26,7 +26,13 @@ func TestGenesisSecret_Apply(t *testing.T) {
 			"accessKeyID": "sampleAccessKeyID",
 		},
 	}
-	manager := manager.NewGenesisSecret(client, provider)
+	registry := genesissecret.NewProviderRegistry()
+	// テスト用に "default-op" 名で fake provider を登録し、fixture の空 .spec.provider
+	// (default-op フォールバック) で解決されるようにする。
+	if err := registry.Register(v1.DefaultOnePasswordProviderName, provider); err != nil {
+		t.Fatalf("failed to register provider: %v", err)
+	}
+	manager := manager.NewGenesisSecret(client, registry)
 
 	manifest := v1.Manifest{
 		// fakeProviderはここの中身は見ない

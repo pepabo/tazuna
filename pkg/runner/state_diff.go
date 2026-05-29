@@ -11,6 +11,9 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/manifest"
 	"github.com/pepabo/tazuna/pkg/state"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -20,27 +23,35 @@ func (t *TazunaRunner) StateDiff(
 	tazuna v1.Tazuna,
 	tazunaYAMLPath string,
 	w io.Writer,
-) error {
+) (retErr error) {
+	ctx, span := otel.Tracer(runnerTracerName).Start(ctx, "tazuna.StateDiff",
+		trace.WithAttributes(
+			attribute.String("tazuna.yaml.path", tazunaYAMLPath),
+			attribute.Int("manifests.count", len(tazuna.Spec.Manifests)),
+		))
+	defer func() {
+		recordRunnerSpanErr(span, retErr)
+		span.End()
+	}()
+
 	if err := t.expandIncludes(ctx, &tazuna, tazunaYAMLPath); err != nil {
 		return errors.WithStack(err)
 	}
 
 	baseDir := filepath.Dir(tazunaYAMLPath)
 	t.ConvertManifestPathFromCwd(baseDir, &tazuna)
+	t.providersBaseDir = baseDir
 
-	managers := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts)
+	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup managers")
+	}
 	store := state.NewConfigMapStateStore(t.k8sClient)
 
 	hasDiff := false
 	for i, m := range tazuna.Spec.Manifests {
 		if m.Name == "" {
 			t.logger.WarnContext(ctx, "manifest has no name, skipping state diff", slog.Int("index", i), slog.String("type", string(m.Type)))
-			continue
-		}
-
-		// parallel managerはBuild()をサポートしていないためスキップ
-		if m.Type == v1.ManifestTypeParallel {
-			t.logger.WarnContext(ctx, "parallel manifest is not supported for state diff, skipping", slog.String("name", m.Name))
 			continue
 		}
 

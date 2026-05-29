@@ -15,6 +15,9 @@ import (
 	"github.com/pepabo/tazuna/pkg/manifest"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/resource"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,7 +33,14 @@ type Helmfile struct {
 }
 
 // Destroy implements Manager.
-func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Destroy",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	if m.Helmfile == nil {
 		m.Helmfile = v1.DefaultHelmfile()
 	}
@@ -78,7 +88,14 @@ func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manife
 }
 
 // Apply implements Manager.
-func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Apply",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	// NOTE: helmfileのapp.Sync() でcontroller-runtimeのfake clientを差し込むことはできないかつ、
 	//       対象のクラスタにhelmの管理情報を保存しないtまえ、
 	//       helmfile templateで生成したKubernetesマニフェスト群をclientでapplyする方針を利用します。
@@ -117,6 +134,7 @@ func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	span.SetAttributes(attribute.Int("manifest.objects", len(objects)))
 
 	for _, obj := range objects {
 		logger.DebugContext(ctx, "trying to create or update an object", slog.String("namespace", obj.GetNamespace()), slog.String("name", obj.GetName()), slog.String("kind", obj.GetObjectKind().GroupVersionKind().Kind))
@@ -218,7 +236,9 @@ func (h *Helmfile) setupTemplateImpl(ctx context.Context, m *v1.Manifest, global
 	return templateImpl, nil
 }
 
-// isResourceReady は、リソースが Ready 状態かどうかを確認します
+// isResourceReady は、リソースが Ready 状態かどうかを確認します。
+// 判定ロジック自体は pkg/resource に切り出されており、本メソッドはライブ取得した
+// unstructured を resource.IsReady に委譲する薄いラッパーです。
 func (h *Helmfile) isResourceReady(ctx context.Context, obj client.Object) (bool, error) {
 	gvk := obj.GetObjectKind().GroupVersionKind()
 	key := client.ObjectKey{
@@ -239,21 +259,7 @@ func (h *Helmfile) isResourceReady(ctx context.Context, obj client.Object) (bool
 		return false, errors.WithStack(err)
 	}
 
-	// リソースタイプごとに Ready 状態を判定
-	switch gvk.Kind {
-	case "Deployment":
-		return isDeploymentReady(current)
-	case "StatefulSet":
-		return isStatefulSetReady(current)
-	case "DaemonSet":
-		return isDaemonSetReady(current)
-	case "Pod":
-		return isPodReady(current)
-	default:
-		// その他のリソースタイプは即座に ready とみなす
-		// (ConfigMap, Secret, Service など)
-		return true, nil
-	}
+	return resource.IsReady(current)
 }
 
 func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (map[string]any, error) {
@@ -398,7 +404,14 @@ func captureStdout(f func() error) (string, error) {
 }
 
 // Build implements Manager.
-func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (string, error) {
+func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (result string, retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Build",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	if m.Helmfile == nil {
 		m.Helmfile = v1.DefaultHelmfile()
 	}
@@ -430,62 +443,4 @@ func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest
 	}
 
 	return out, nil
-}
-
-// isDeploymentReady は Deployment が Ready かどうかを確認します
-func isDeploymentReady(u *unstructured.Unstructured) (bool, error) {
-	// spec.replicas が 0 の場合は即座に ready とみなす
-	specReplicas, _, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
-	if specReplicas == 0 {
-		return true, nil
-	}
-
-	readyReplicas, _, _ := unstructured.NestedInt64(u.Object, "status", "readyReplicas")
-	availableReplicas, _, _ := unstructured.NestedInt64(u.Object, "status", "availableReplicas")
-	replicas, _, _ := unstructured.NestedInt64(u.Object, "status", "replicas")
-
-	return readyReplicas == replicas && availableReplicas == replicas && replicas > 0, nil
-}
-
-// isStatefulSetReady は StatefulSet が Ready かどうかを確認します
-func isStatefulSetReady(u *unstructured.Unstructured) (bool, error) {
-	// spec.replicas が 0 の場合は即座に ready とみなす
-	specReplicas, _, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
-	if specReplicas == 0 {
-		return true, nil
-	}
-
-	readyReplicas, _, _ := unstructured.NestedInt64(u.Object, "status", "readyReplicas")
-	replicas, _, _ := unstructured.NestedInt64(u.Object, "status", "replicas")
-
-	return readyReplicas == replicas && replicas > 0, nil
-}
-
-// isDaemonSetReady は DaemonSet が Ready かどうかを確認します
-func isDaemonSetReady(u *unstructured.Unstructured) (bool, error) {
-	numberReady, _, _ := unstructured.NestedInt64(u.Object, "status", "numberReady")
-	desiredNumberScheduled, _, _ := unstructured.NestedInt64(u.Object, "status", "desiredNumberScheduled")
-
-	return numberReady == desiredNumberScheduled && desiredNumberScheduled > 0, nil
-}
-
-// isPodReady は Pod が Ready かどうかを確認します
-func isPodReady(u *unstructured.Unstructured) (bool, error) {
-	phase, _, _ := unstructured.NestedString(u.Object, "status", "phase")
-	if phase != "Running" {
-		return false, nil
-	}
-
-	conditions, _, _ := unstructured.NestedSlice(u.Object, "status", "conditions")
-	for _, c := range conditions {
-		condition, ok := c.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if condition["type"] == "Ready" {
-			return condition["status"] == "True", nil
-		}
-	}
-
-	return false, nil
 }
