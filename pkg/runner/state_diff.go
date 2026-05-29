@@ -42,12 +42,6 @@ func (t *TazunaRunner) StateDiff(
 			continue
 		}
 
-		// parallel managerはBuild()をサポートしていないためスキップ
-		if m.Type == v1.ManifestTypeParallel {
-			t.logger.WarnContext(ctx, "parallel manifest is not supported for state diff, skipping", slog.String("name", m.Name))
-			continue
-		}
-
 		mgr, ok := managers[string(m.Type)]
 		if !ok {
 			return fmt.Errorf("manager %s not found", m.Type)

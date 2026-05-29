@@ -182,48 +182,6 @@ data:
 	assert.NotContains(t, out, "Manifest: kustomize")
 }
 
-// TestPlan_SkipParallel は parallel manifest がスキップされ警告ログが出ることを縛る。
-func TestPlan_SkipParallel(t *testing.T) {
-	t.Parallel()
-
-	c := fake.NewClientBuilder().Build()
-	logBuf := &bytes.Buffer{}
-	logger := slog.New(slog.NewTextHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	r := runner.NewTazunaRunner(logger, c, nil)
-
-	tazuna := v1.Tazuna{
-		Spec: v1.TazunaSpec{
-			Manifests: []v1.Manifest{
-				{
-					Name: "parallel-parent",
-					Type: v1.ManifestTypeParallel,
-					Parallel: &v1.ManifestParallel{
-						Children: []v1.Manifest{
-							{
-								Name: "parallel-child-kustomize",
-								Type: v1.ManifestTypeKustomize,
-								Path: "testdata/ok/kustomize",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	var buf bytes.Buffer
-	err := r.Plan(context.Background(), tazuna,
-		filepath.Join(t.TempDir(), "tazuna.yaml"), &buf)
-	require.NoError(t, err)
-
-	out := buf.String()
-	assert.Contains(t, out, "No changes detected.")
-	assert.NotContains(t, out, "Manifest: parallel-parent")
-
-	assert.Contains(t, logBuf.String(), "parallel manifest is not supported for plan",
-		"warn log for parallel manifest should be emitted")
-}
-
 // TestPlan_SkipGenesisSecret は GenesisSecret manifest がスキップされ、
 // plan の対象外であることを縛る。GenesisSecret は always-sync 扱いのため
 // 「事前にフィールド差分を見る」という plan の概念に当てはまらない。

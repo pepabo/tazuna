@@ -123,52 +123,19 @@ func TestValidateManifestNames(t *testing.T) {
 func TestCollectAllManifests(t *testing.T) {
 	manifests := []v1.Manifest{
 		{Name: "top1"},
-		{
-			Name: "parallel1",
-			Parallel: &v1.ManifestParallel{
-				Children: []v1.Manifest{
-					{Name: "child1"},
-					{Name: "child2"},
-				},
-			},
-		},
+		{Name: "middle"},
 		{Name: "top2"},
-	}
-
-	result := CollectAllManifests(manifests)
-	if len(result) != 5 {
-		t.Fatalf("expected 5 manifests, got %d", len(result))
-	}
-
-	expected := []string{"top1", "parallel1", "child1", "child2", "top2"}
-	for i, name := range expected {
-		if result[i].Name != name {
-			t.Errorf("result[%d].Name = %q, want %q", i, result[i].Name, name)
-		}
-	}
-}
-
-func TestCollectAllManifests_NestedParallel(t *testing.T) {
-	manifests := []v1.Manifest{
-		{
-			Name: "outer",
-			Parallel: &v1.ManifestParallel{
-				Children: []v1.Manifest{
-					{
-						Name: "inner",
-						Parallel: &v1.ManifestParallel{
-							Children: []v1.Manifest{
-								{Name: "deep"},
-							},
-						},
-					},
-				},
-			},
-		},
 	}
 
 	result := CollectAllManifests(manifests)
 	if len(result) != 3 {
 		t.Fatalf("expected 3 manifests, got %d", len(result))
+	}
+
+	expected := []string{"top1", "middle", "top2"}
+	for i, name := range expected {
+		if result[i].Name != name {
+			t.Errorf("result[%d].Name = %q, want %q", i, result[i].Name, name)
+		}
 	}
 }

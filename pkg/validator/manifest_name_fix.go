@@ -2,7 +2,6 @@ package validator
 
 import (
 	"fmt"
-	"maps"
 	"path/filepath"
 	"strings"
 
@@ -11,10 +10,16 @@ import (
 
 // FixManifestNames はname未設定のmanifestに対してtypeとpathから名前を自動付与する。
 // 既存の名前との重複を回避するためにサフィックスを付与する。
-// parallel内のchildrenも再帰的に処理する。
 func FixManifestNames(manifests []v1.Manifest) {
 	usedNames := collectExistingNames(manifests)
-	fixManifestNamesRecursive(manifests, usedNames)
+	for i := range manifests {
+		if manifests[i].Name == "" {
+			name := generateName(manifests[i])
+			name = ensureUnique(name, usedNames)
+			manifests[i].Name = name
+			usedNames[name] = true
+		}
+	}
 }
 
 func collectExistingNames(manifests []v1.Manifest) map[string]bool {
@@ -23,25 +28,8 @@ func collectExistingNames(manifests []v1.Manifest) map[string]bool {
 		if m.Name != "" {
 			names[m.Name] = true
 		}
-		if m.Parallel != nil {
-			maps.Copy(names, collectExistingNames(m.Parallel.Children))
-		}
 	}
 	return names
-}
-
-func fixManifestNamesRecursive(manifests []v1.Manifest, usedNames map[string]bool) {
-	for i := range manifests {
-		if manifests[i].Name == "" {
-			name := generateName(manifests[i])
-			name = ensureUnique(name, usedNames)
-			manifests[i].Name = name
-			usedNames[name] = true
-		}
-		if manifests[i].Parallel != nil {
-			fixManifestNamesRecursive(manifests[i].Parallel.Children, usedNames)
-		}
-	}
 }
 
 // generateName はtypeとpathからmanifest名を生成する。

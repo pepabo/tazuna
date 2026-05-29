@@ -5,7 +5,6 @@ package runner_test
 import (
 	"bytes"
 	"context"
-	"log/slog"
 	"path/filepath"
 	"testing"
 	"time"
@@ -197,45 +196,4 @@ func TestStatus_NoState(t *testing.T) {
 	out := buf.String()
 	assert.Contains(t, out, "Manifest: no-state-manifest")
 	assert.Contains(t, out, "(no state)")
-}
-
-// TestStatus_SkipParallel は parallel manifest がスキップされ警告ログが出ることを確認する。
-func TestStatus_SkipParallel(t *testing.T) {
-	t.Parallel()
-
-	c := fake.NewClientBuilder().Build()
-	logBuf := &bytes.Buffer{}
-	logger := slog.New(slog.NewTextHandler(logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	r := runner.NewTazunaRunner(logger, c, nil)
-
-	tazuna := v1.Tazuna{
-		Spec: v1.TazunaSpec{
-			Manifests: []v1.Manifest{
-				{
-					Name: "parallel-parent",
-					Type: v1.ManifestTypeParallel,
-					Parallel: &v1.ManifestParallel{
-						Children: []v1.Manifest{
-							{
-								Name: "parallel-child-kustomize",
-								Type: v1.ManifestTypeKustomize,
-								Path: "testdata/ok/kustomize",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	var buf bytes.Buffer
-	err := r.Status(context.Background(), tazuna,
-		filepath.Join(t.TempDir(), "tazuna.yaml"), &buf)
-	require.NoError(t, err)
-
-	out := buf.String()
-	assert.NotContains(t, out, "Manifest: parallel-parent")
-
-	assert.Contains(t, logBuf.String(), "parallel manifest is not supported for status",
-		"warn log for parallel manifest should be emitted")
 }
