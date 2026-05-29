@@ -163,23 +163,6 @@ func TestManifest_RoundTrip_AllTypes(t *testing.T) {
 				}
 			},
 		},
-		{
-			name: "parallel",
-			src: Manifest{
-				Name: "p", Type: ManifestTypeParallel,
-				Parallel: &ManifestParallel{
-					Children: []Manifest{
-						{Name: "c1", Type: ManifestTypeKustomize, Path: "./c1"},
-						{Name: "c2", Type: ManifestTypeKustomize, Path: "./c2"},
-					},
-				},
-			},
-			verify: func(t *testing.T, m Manifest) {
-				if m.Parallel == nil || len(m.Parallel.Children) != 2 {
-					t.Errorf("Parallel = %+v", m.Parallel)
-				}
-			},
-		},
 	}
 
 	for _, tt := range tests {

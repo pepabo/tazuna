@@ -101,9 +101,6 @@ func setupManagers(
 	// ORAS managerはartifact pull後にhelmfile/kustomize managerへ委譲する
 	m[string(v1.ManifestTypeORAS)] = newORASManager(helmfileManager, kustomizeManager, orasOpts)
 
-	// parallelマネージャーは、他のマネージャーをラップして並列実行を可能にする
-	// そのため、他のマネージャーをすべて登録しておく必要がある
-	m[string(v1.ManifestTypeParallel)] = manager.NewParallel(m)
 	return m, nil
 }
 

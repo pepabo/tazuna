@@ -118,10 +118,6 @@ func ValidateManifest(manifest *v1.Manifest, basePath string) error {
 		// Kustomize特有のバリデーションがあればここに追加
 	case v1.ManifestTypeGenesisSecret:
 		// GenesisSecret特有のバリデーションがあればここに追加
-	case v1.ManifestTypeParallel:
-		if err := ValidateManifestParallel(manifest.Parallel, basePath); err != nil {
-			return errors.Wrapf(err, "parallel validation failed for manifest %s", manifest.Path)
-		}
 	case v1.ManifestTypeORAS:
 		if err := ValidateManifestORAS(manifest.ORAS); err != nil {
 			return errors.Wrapf(err, "oras validation failed for manifest %s", manifest.Path)
@@ -230,25 +226,6 @@ func ValidateOnePasswordVaultSelector(op *v1.OnePasswordVaultSelector, varName s
 	if op.Key != v1.HelmFileVarOpKeyID && op.Key != v1.HelmFileVarOpKeyLabel {
 		return errors.Errorf("helmfile var '%s' has From op but op.key field has invalid value: %s (supported: %s, %s)",
 			varName, op.Key, v1.HelmFileVarOpKeyID, v1.HelmFileVarOpKeyLabel)
-	}
-
-	return nil
-}
-
-// ValidateManifestParallel は ManifestParallel をバリデーションします
-func ValidateManifestParallel(parallel *v1.ManifestParallel, basePath string) error {
-	if parallel == nil {
-		return nil // parallelはoptional
-	}
-
-	if len(parallel.Children) == 0 {
-		return errors.New("parallel manifest must have at least one child")
-	}
-
-	for i, child := range parallel.Children {
-		if err := ValidateManifest(&child, basePath); err != nil {
-			return errors.Wrapf(err, "validation failed for parallel child[%d]", i)
-		}
 	}
 
 	return nil

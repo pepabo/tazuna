@@ -120,51 +120,6 @@ func TestApplyToCluster_StateSaved_EmptyManifestName(t *testing.T) {
 	assert.Contains(t, logBuf.String(), "manifest has no name", "warn log for empty manifest name should be emitted")
 }
 
-// TestApplyToCluster_StateSaved_ParallelManifestSkipped は parallel manifest 自身と
-// その配下の子 manifest どちらの state も書かれないこと (state_sync.go と同じ制約) を縛る。
-func TestApplyToCluster_StateSaved_ParallelManifestSkipped(t *testing.T) {
-	t.Parallel()
-
-	c := fake.NewClientBuilder().Build()
-	r := runner.NewTazunaRunner(discardLogger(), c, nil)
-
-	// parallel の子に kustomize manifest を1つ持たせる。子にも Name を付け、
-	// 「親の state はスキップされ、かつ子の state も書かれない」ことを縛る。
-	tazuna := v1.Tazuna{
-		Spec: v1.TazunaSpec{
-			Manifests: []v1.Manifest{
-				{
-					Name: "parallel-parent",
-					Type: v1.ManifestTypeParallel,
-					Parallel: &v1.ManifestParallel{
-						Children: []v1.Manifest{
-							{
-								Name: "parallel-child-kustomize",
-								Type: v1.ManifestTypeKustomize,
-								Path: "testdata/ok/kustomize",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	require.NoError(t, r.ApplyToCluster(context.Background(), tazuna))
-
-	store := state.NewConfigMapStateStore(c)
-
-	// 親 (parallel) の state は書かれていない
-	parent, err := store.Get(context.Background(), "parallel-parent")
-	require.NoError(t, err)
-	assert.Empty(t, parent.Entries, "parallel manifest must not save state for itself")
-
-	// 子 manifest の state も書かれていない (現状制約)
-	child, err := store.Get(context.Background(), "parallel-child-kustomize")
-	require.NoError(t, err)
-	assert.Empty(t, child.Entries, "child manifest under parallel must not have state saved")
-}
-
 // TestApplyToCluster_StateSaved_MultipleManifestsIndependent は複数 manifest が
 // それぞれ別の tazuna-state-<name> ConfigMap に独立して保存されることを縛る。
 func TestApplyToCluster_StateSaved_MultipleManifestsIndependent(t *testing.T) {

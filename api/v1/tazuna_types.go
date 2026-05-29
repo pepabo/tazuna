@@ -71,7 +71,6 @@ type Manifest struct {
 	Kustomize     *ManifestKustomize     `json:"kustomize,omitempty"`
 	GenesisSecret *ManifestGenesisSecret `json:"genesisSecret,omitempty"`
 	Helmfile      *ManifestHelmfile      `json:"helmfile,omitempty"`
-	Parallel      *ManifestParallel      `json:"parallel,omitempty"`
 	ORAS          *ManifestORAS          `json:"oras,omitempty"`
 	// DependsOn はこのマニフェスト適用前に完了している必要があるマニフェスト名のリスト。
 	// dependsOn に列挙された全マニフェストが apply 成功した後でのみ、このマニフェストの
@@ -90,7 +89,6 @@ const (
 	ManifestTypeKustomize     ManifestType = "kustomize"
 	ManifestTypeGenesisSecret ManifestType = "genesissecret"
 	ManifestTypeHelmfile      ManifestType = "helmfile"
-	ManifestTypeParallel      ManifestType = "parallel"
 	ManifestTypeORAS          ManifestType = "oras"
 )
 
@@ -141,9 +139,4 @@ type OnePasswordVaultSelector struct {
 	Vault string `json:"vault"` // 1PasswordのVault名
 	Item  string `json:"item"`  // 1PasswordのItem名
 	Field string `json:"field"` // 1PasswordのField名
-}
-
-type ManifestParallel struct {
-	// Childrenはマニフェストの子マニフェストを定義します
-	Children []Manifest `json:"children,omitempty"`
 }

@@ -55,13 +55,6 @@ func (t *TazunaRunner) Status(
 			continue
 		}
 
-		// parallel manager は state を持たないためスキップする。
-		if m.Type == v1.ManifestTypeParallel {
-			t.logger.WarnContext(ctx, "parallel manifest is not supported for status, skipping",
-				slog.String("name", m.Name))
-			continue
-		}
-
 		data, err := store.Get(ctx, m.Name)
 		if err != nil {
 			return errors.Wrapf(err, "failed to get state for manifest %q", m.Name)

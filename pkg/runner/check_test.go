@@ -92,31 +92,6 @@ func TestCheck_NameReserved(t *testing.T) {
 	assert.Contains(t, err.Error(), "reserved")
 }
 
-func TestCheck_ParallelChildrenValidated(t *testing.T) {
-	t.Parallel()
-	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
-	r := runner.NewTazunaRunner(logger, nil, nil)
-
-	err := r.Check(context.Background(), &v1.Tazuna{
-		Spec: v1.TazunaSpec{
-			Manifests: []v1.Manifest{
-				{
-					Name: "parallel-step",
-					Type: "parallel",
-					Parallel: &v1.ManifestParallel{
-						Children: []v1.Manifest{
-							{Name: "child-a", Type: "kustomize", Path: "./a"},
-							{Name: "", Type: "kustomize", Path: "./b"},
-						},
-					},
-				},
-			},
-		},
-	}, "testdata/ok/tazuna.yaml")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "name is required")
-}
-
 func TestCheck_WithIncludes(t *testing.T) {
 	t.Parallel()
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))

@@ -74,12 +74,6 @@ func (t *TazunaRunner) Plan(
 			continue
 		}
 
-		// parallel manager は Build() 未対応のためスキップ
-		if m.Type == v1.ManifestTypeParallel {
-			t.logger.WarnContext(ctx, "parallel manifest is not supported for plan, skipping", slog.String("name", m.Name))
-			continue
-		}
-
 		// GenesisSecret は always-sync 扱いで apply 時に毎回再シンクされるため、
 		// plan のフィールド diff という概念に合わない。drift と同様にスキップする。
 		if m.Type == v1.ManifestTypeGenesisSecret {

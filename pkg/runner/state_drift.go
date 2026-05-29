@@ -58,12 +58,6 @@ func (t *TazunaRunner) StateDrift(
 			continue
 		}
 
-		// parallel manager は Build() をサポートしておらず state も保存されないためスキップ
-		if m.Type == v1.ManifestTypeParallel {
-			t.logger.WarnContext(ctx, "parallel manifest is not supported for state drift, skipping", slog.String("name", m.Name))
-			continue
-		}
-
 		// GenesisSecret は always-sync 扱いであり drift という概念を持たないためスキップ
 		if m.Type == v1.ManifestTypeGenesisSecret {
 			t.logger.DebugContext(ctx, "genesis-secret manifest is always-sync, skipping state drift", slog.String("name", m.Name))

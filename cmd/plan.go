@@ -26,8 +26,7 @@ controller-runtime fake client, which does not fully support server-side apply
 with dry-run.
 
 Resources that do not yet exist on the cluster are reported as "to be created".
-Parallel and GenesisSecret manifests are skipped: parallel managers do not
-support Build() and GenesisSecret is always-sync by design.
+GenesisSecret manifests are skipped because they are always-sync by design.
 
 Examples:
   tazuna plan -f tazuna.yaml

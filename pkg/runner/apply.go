@@ -246,12 +246,6 @@ func (t *TazunaRunner) SyncManifest(
 		return nil
 	}
 
-	// parallel マニフェストは Build() 未対応のためスキップする
-	if m.Type == v1.ManifestTypeParallel {
-		t.logger.WarnContext(ctx, "parallel manifest is not supported for state sync, skipping", slog.String("name", m.Name))
-		return nil
-	}
-
 	mgr, ok := managers[string(m.Type)]
 	if !ok {
 		return fmt.Errorf("manager %s not found", m.Type)
@@ -401,12 +395,6 @@ func (t *TazunaRunner) saveManifestState(
 	// manifest名が未設定のものはstate keyを作れないためスキップする
 	if m.Name == "" {
 		t.logger.WarnContext(ctx, "manifest has no name, skipping state save", slog.String("type", string(m.Type)))
-		return nil
-	}
-
-	// parallel マニフェストは現状 state 対応していないためスキップする
-	if m.Type == v1.ManifestTypeParallel {
-		t.logger.WarnContext(ctx, "parallel manifest is not supported for state save, skipping", slog.String("name", m.Name))
 		return nil
 	}
 
