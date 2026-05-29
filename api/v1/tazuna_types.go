@@ -37,6 +37,10 @@ type TazunaSpec struct {
 	Manifests        []Manifest       `json:"manifests"`
 	// Testsはすべてのマニフェスト適用が終わったあとに実行されます
 	Tests []TestPluginSpec `json:"tests"`
+	// Providers は Secret provider の宣言リストです。未指定時は組み込みの "default-op"
+	// (1Password) のみが利用可能であり、これは GenesisSecret の .spec.provider が空文字
+	// だった場合の後方互換フォールバックとして利用されます。
+	Providers []ProviderConfig `json:"providers,omitempty"`
 }
 
 // IncludeFile はincludeするファイルを定義します

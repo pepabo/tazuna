@@ -27,8 +27,12 @@ func (t *TazunaRunner) StateDiff(
 
 	baseDir := filepath.Dir(tazunaYAMLPath)
 	t.ConvertManifestPathFromCwd(baseDir, &tazuna)
+	t.providersBaseDir = baseDir
 
-	managers := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts)
+	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup managers")
+	}
 	store := state.NewConfigMapStateStore(t.k8sClient)
 
 	hasDiff := false

@@ -80,6 +80,10 @@ func ValidateTazunaSpec(spec *v1.TazunaSpec, basePath string) error {
 		}
 	}
 
+	if err := ValidateProviders(spec.Providers); err != nil {
+		return errors.WithStack(err)
+	}
+
 	return nil
 }
 

@@ -29,6 +29,7 @@ func (t *TazunaRunner) Destroy(
 	// それをcwdからのパスに変換する
 	baseDir := filepath.Dir(tazunaYAMLPath)
 	t.ConvertManifestPathFromCwd(baseDir, &tazuna)
+	t.providersBaseDir = baseDir
 
 	if err := t.DestroyResourcesOnCluster(ctx, tazuna); err != nil {
 		return errors.WithStack(err)
@@ -43,7 +44,10 @@ func (t *TazunaRunner) DestroyResourcesOnCluster(
 	tazuna v1.Tazuna,
 ) error {
 	// switchを書かずに処理を分けるためmapにmanagerを詰める
-	managers := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts)
+	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup managers")
+	}
 	for _, m := range tazuna.Spec.Manifests {
 		// タグフィルタリングのチェック
 		if len(t.tags) > 0 {

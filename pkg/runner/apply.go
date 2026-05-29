@@ -49,6 +49,8 @@ func (t *TazunaRunner) Apply(
 	// それをcwdからのパスに変換する
 	baseDir := filepath.Dir(tazunaYAMLPath)
 	t.ConvertManifestPathFromCwd(baseDir, &tazuna)
+	// providersBaseDir は envfile provider の相対 path 解決に使う
+	t.providersBaseDir = baseDir
 
 	if err := t.ApplyToCluster(ctx, tazuna); err != nil {
 		return errors.WithStack(err)
@@ -68,7 +70,11 @@ func (t *TazunaRunner) ApplyToCluster(
 	if t.managersOverride != nil {
 		managers = t.managersOverride
 	} else {
-		managers = setupManagers(t.k8sClient, t.opClient, t.orasPullOpts)
+		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+		if err != nil {
+			return errors.Wrap(err, "failed to setup managers")
+		}
+		managers = m
 	}
 	testPlugins := setupTestPlugins(t.k8sClient)
 
