@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -23,8 +24,16 @@ Use the --tags flag to target only manifests with the specified tags.
 
 Examples:
   tazuna build -f tazuna.yaml
-  tazuna build -f tazuna.yaml --tags web`,
+  tazuna build -f tazuna.yaml --tags web
+  tazuna build -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		_, shutdownTracer, err := cliutil.SetupTracerFromCmd(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = shutdownTracer(context.Background()) }()
+
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return err
@@ -57,7 +66,7 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		out, err := r.Build(cmd.Context(), *tazuna, path)
+		out, err := r.Build(ctx, *tazuna, path)
 		if err != nil {
 			return errors.WithStack(err)
 		}

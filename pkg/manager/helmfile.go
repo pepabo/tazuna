@@ -15,6 +15,9 @@ import (
 	"github.com/pepabo/tazuna/pkg/manifest"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/resource"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -30,7 +33,14 @@ type Helmfile struct {
 }
 
 // Destroy implements Manager.
-func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Destroy",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	if m.Helmfile == nil {
 		m.Helmfile = v1.DefaultHelmfile()
 	}
@@ -78,7 +88,14 @@ func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manife
 }
 
 // Apply implements Manager.
-func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Apply",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	// NOTE: helmfileのapp.Sync() でcontroller-runtimeのfake clientを差し込むことはできないかつ、
 	//       対象のクラスタにhelmの管理情報を保存しないtまえ、
 	//       helmfile templateで生成したKubernetesマニフェスト群をclientでapplyする方針を利用します。
@@ -117,6 +134,7 @@ func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	span.SetAttributes(attribute.Int("manifest.objects", len(objects)))
 
 	for _, obj := range objects {
 		logger.DebugContext(ctx, "trying to create or update an object", slog.String("namespace", obj.GetNamespace()), slog.String("name", obj.GetName()), slog.String("kind", obj.GetObjectKind().GroupVersionKind().Kind))
@@ -386,7 +404,14 @@ func captureStdout(f func() error) (string, error) {
 }
 
 // Build implements Manager.
-func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (string, error) {
+func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (result string, retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Build",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	if m.Helmfile == nil {
 		m.Helmfile = v1.DefaultHelmfile()
 	}

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 
 	"github.com/cockroachdb/errors"
@@ -31,8 +32,16 @@ GenesisSecret manifests are skipped because they are always-sync by design.
 Examples:
   tazuna plan -f tazuna.yaml
   tazuna plan -f tazuna.yaml --tags web,batch
-  tazuna plan -f tazuna.yaml --log-level debug`,
+  tazuna plan -f tazuna.yaml --log-level debug
+  tazuna plan -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		_, shutdownTracer, err := cliutil.SetupTracerFromCmd(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = shutdownTracer(context.Background()) }()
+
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
@@ -62,7 +71,7 @@ Examples:
 			return err
 		}
 
-		if err := r.Plan(cmd.Context(), *tazuna, path, os.Stdout); err != nil {
+		if err := r.Plan(ctx, *tazuna, path, os.Stdout); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil

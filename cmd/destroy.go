@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -29,8 +30,16 @@ Use the --tags flag to target only manifests with the specified tags.
 
 Examples:
   TAZUNA_DESTROY_EXECUTABLE=true tazuna destroy -f tazuna.yaml
-  TAZUNA_DESTROY_EXECUTABLE=true tazuna destroy -f tazuna.yaml --force`,
+  TAZUNA_DESTROY_EXECUTABLE=true tazuna destroy -f tazuna.yaml --force
+  TAZUNA_DESTROY_EXECUTABLE=true tazuna destroy -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		_, shutdownTracer, err := cliutil.SetupTracerFromCmd(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = shutdownTracer(context.Background()) }()
+
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
@@ -84,7 +93,7 @@ Examples:
 			return nil
 		}
 
-		if err := r.Destroy(cmd.Context(), *tazuna, path); err != nil {
+		if err := r.Destroy(ctx, *tazuna, path); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil

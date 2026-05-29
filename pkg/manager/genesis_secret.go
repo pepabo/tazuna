@@ -11,6 +11,9 @@ import (
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/genesissecret"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"sigs.k8s.io/yaml"
 
 	corev1 "k8s.io/api/core/v1"
@@ -103,7 +106,14 @@ func (g *GenesisSecret) resolveProvider(name string) (genesissecret.SecretProvid
 }
 
 // Apply implements Manager.
-func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "GenesisSecret.Apply",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return errors.WithStack(err)
@@ -118,6 +128,7 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 	if err != nil {
 		return errors.WithStack(err)
 	}
+	span.SetAttributes(attribute.String("genesissecret.provider", genesisSecret.Spec.Provider))
 
 	items := map[string]string{}
 	for _, s := range genesisSecret.Spec.Secrets {
@@ -172,7 +183,14 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 }
 
 // Destroy implements Manager.
-func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "GenesisSecret.Destroy",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return errors.WithStack(err)
@@ -233,7 +251,14 @@ func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.M
 var _ Manager = &GenesisSecret{}
 
 // Build implements Manager.
-func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (string, error) {
+func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (result string, retErr error) {
+	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "GenesisSecret.Build",
+		trace.WithAttributes(manifestSpanAttrs(m)...))
+	defer func() {
+		recordSpanError(span, retErr)
+		span.End()
+	}()
+
 	data, err := os.ReadFile(m.Path)
 	if err != nil {
 		return "", errors.WithStack(err)
