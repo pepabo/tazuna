@@ -24,6 +24,20 @@ tazuna state diff [-f tazuna.yaml]
 `context_matches` の評価は行いません。
 クラスタへの read アクセスのみを行い、何も変更しません。
 
+## `state drift` との違い
+
+`state diff` と [`state drift`](./state-drift.md) はどちらも「差分」を表示しますが、
+比較対象が違います。
+
+| 観点         | `state diff`             | `state drift`              |
+|--------------|--------------------------|----------------------------|
+| 比較対象     | Build 結果 vs State      | State vs ライブクラスタ    |
+| 検出する変化 | `tazuna.yaml` 側の変更   | 手動 `kubectl apply` / 手動削除 |
+| 出力分類     | `added` / `modified` / `removed` / `always-sync` | `live-drifted` / `live-missing` |
+
+`tazuna.yaml` 側の更新を反映していない drift か、クラスタ側を直接触られた drift かで
+使うコマンドを切り替えると、ノイズの少ない監視を組み立てられます。
+
 ## フラグ
 
 [グローバルフラグ](./index.md#グローバルフラグ) 以外に固有フラグはありません。
@@ -37,6 +51,7 @@ tazuna state diff -f tazuna.yaml
 
 ## 関連
 
-- 反映は [`tazuna state sync`](./state-sync.md)
+- 反映は [`tazuna apply --sync`](./apply.md#state-連携---sync----prune----atomic)
+- ライブクラスタとの差分検知は [`tazuna state drift`](./state-drift.md)
 - 全件レンダリング結果が欲しいときは [`tazuna build`](./build.md)
 - 用語: [Diff type](../../concepts/glossary.md#diff-type) / [ContentHash](../../concepts/glossary.md#contenthash)

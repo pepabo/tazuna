@@ -31,6 +31,8 @@ tazuna state list -f tazuna.yaml
 
 ## 関連
 
-- 差分の確認は [`tazuna state diff`](./state-diff.md)
-- 差分の反映は [`tazuna state sync`](./state-sync.md)
+- 宣言 vs State の差分は [`tazuna state diff`](./state-diff.md)
+- ライブクラスタとの drift は [`tazuna state drift`](./state-drift.md)
+- 差分の反映は [`tazuna apply --sync`](./apply.md#state-連携---sync----prune----atomic)
+- managed リソースの readiness は [`tazuna status`](./status.md)
 - State の語彙は [用語集 - State](../../concepts/glossary.md#state)
