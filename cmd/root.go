@@ -14,6 +14,7 @@ var rootCmd = &cobra.Command{
 	Long: `Owns cluster bootstrap and handles everything required to reach Production Ready.
 
 Main subcommands:
+  init                     Generate a starter tazuna.yaml
   apply                    Apply manifests defined in tazuna.yaml to the cluster
   build                    Generate the manifests that would be applied and print them to stdout
   check                    Validate tazuna.yaml
