@@ -3,8 +3,10 @@ package manager
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"sort"
 
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -25,6 +27,9 @@ import (
 type GenesisSecret struct {
 	client   client.Client
 	registry *genesissecret.ProviderRegistry
+	// stdout は GenesisSecretOutputStdout の書き出し先。
+	// 未設定なら os.Stdout を使う。テストで差し替えるためのフィールド。
+	stdout io.Writer
 }
 
 // NewGenesisSecret は GenesisSecret manager を生成します。
@@ -38,7 +43,50 @@ func NewGenesisSecret(
 	return &GenesisSecret{
 		client:   c,
 		registry: registry,
+		stdout:   os.Stdout,
 	}
+}
+
+// WithStdout は stdout 出力先を上書きします。テスト用。
+func (g *GenesisSecret) WithStdout(w io.Writer) *GenesisSecret {
+	g.stdout = w
+	return g
+}
+
+// classifyOutput は GenesisSecretOutput がどの出力種別を要求しているかを判別します。
+// 両方nil or 両方非nil はエラーとして扱います。
+func classifyOutput(o v1.GenesisSecretOutput) (string, error) {
+	hasStdout := o.Stdout != nil
+	hasK8s := o.KubernetesSecret != nil
+	switch {
+	case hasStdout && hasK8s:
+		return "", fmt.Errorf("output cannot specify both stdout and kubernetesSecret")
+	case hasStdout:
+		return "stdout", nil
+	case hasK8s:
+		return "kubernetesSecret", nil
+	default:
+		return "", fmt.Errorf("output must specify either stdout or kubernetesSecret")
+	}
+}
+
+// writeItemsToStdout は items を sorted KEY=VALUE 形式で stdout writer に書き出します。
+func (g *GenesisSecret) writeItemsToStdout(items map[string]string) error {
+	w := g.stdout
+	if w == nil {
+		w = os.Stdout
+	}
+	keys := make([]string, 0, len(items))
+	for k := range items {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if _, err := fmt.Fprintf(w, "%s=%s\n", k, items[k]); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
 }
 
 // resolveProvider は GenesisSecret manifest の .spec.provider 値から
@@ -81,34 +129,42 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 	}
 
 	for _, o := range genesisSecret.Spec.Outputs {
-		if o.KubernetesSecret == nil {
-			return fmt.Errorf(".spec.output currently supports only KubernetesSecret")
-		}
-
-		secret := corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: o.KubernetesSecret.Namespace,
-				Name:      o.KubernetesSecret.Name,
-			},
-		}
-
-		_, err := controllerutil.CreateOrUpdate(ctx, g.client, &secret, func() error {
-			secret.SetLabels(o.KubernetesSecret.Labels)
-			secret.SetAnnotations(o.KubernetesSecret.Annotations)
-			secret.StringData = items
-			if o.KubernetesSecret.Type == "" {
-				secret.Type = corev1.SecretTypeOpaque
-			} else {
-				secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
-			}
-			return nil
-		})
+		kind, err := classifyOutput(o)
 		if err != nil {
 			return errors.WithStack(err)
+		}
+
+		switch kind {
+		case "stdout":
+			if err := g.writeItemsToStdout(items); err != nil {
+				return errors.WithStack(err)
+			}
+		case "kubernetesSecret":
+			secret := corev1.Secret{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Secret",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: o.KubernetesSecret.Namespace,
+					Name:      o.KubernetesSecret.Name,
+				},
+			}
+
+			_, err := controllerutil.CreateOrUpdate(ctx, g.client, &secret, func() error {
+				secret.SetLabels(o.KubernetesSecret.Labels)
+				secret.SetAnnotations(o.KubernetesSecret.Annotations)
+				secret.StringData = items
+				if o.KubernetesSecret.Type == "" {
+					secret.Type = corev1.SecretTypeOpaque
+				} else {
+					secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
+				}
+				return nil
+			})
+			if err != nil {
+				return errors.WithStack(err)
+			}
 		}
 	}
 
@@ -142,24 +198,31 @@ func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.M
 	}
 
 	for _, o := range genesisSecret.Spec.Outputs {
-		if o.KubernetesSecret == nil {
-			return fmt.Errorf(".spec.output currently supports only KubernetesSecret")
+		kind, err := classifyOutput(o)
+		if err != nil {
+			return errors.WithStack(err)
 		}
 
-		secret := corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: o.KubernetesSecret.Namespace,
-				Name:      o.KubernetesSecret.Name,
-			},
-		}
+		switch kind {
+		case "stdout":
+			// stdout 出力にはクラスタリソースが対応しないため Destroy では何もしない
+			continue
+		case "kubernetesSecret":
+			secret := corev1.Secret{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "Secret",
+					APIVersion: "v1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: o.KubernetesSecret.Namespace,
+					Name:      o.KubernetesSecret.Name,
+				},
+			}
 
-		if err := g.client.Delete(ctx, &secret); err != nil {
-			if client.IgnoreNotFound(err) != nil {
-				return errors.WithStack(err)
+			if err := g.client.Delete(ctx, &secret); err != nil {
+				if client.IgnoreNotFound(err) != nil {
+					return errors.WithStack(err)
+				}
 			}
 		}
 	}
@@ -199,35 +262,44 @@ func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Man
 		return "", fmt.Errorf("no outputs defined")
 	}
 	o := genesisSecret.Spec.Outputs[0]
-	if o.KubernetesSecret == nil {
-		return "", fmt.Errorf(".spec.output currently supports only KubernetesSecret")
-	}
-
-	secret := corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       "Secret",
-			APIVersion: "v1",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: o.KubernetesSecret.Namespace,
-			Name:      o.KubernetesSecret.Name,
-		},
-	}
-	secret.SetLabels(o.KubernetesSecret.Labels)
-	secret.SetAnnotations(o.KubernetesSecret.Annotations)
-	secret.StringData = items
-	if o.KubernetesSecret.Type == "" {
-		secret.Type = corev1.SecretTypeOpaque
-	} else {
-		secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
-	}
-
-	out, err := yaml.Marshal(secret)
+	kind, err := classifyOutput(o)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 
-	return string(out), nil
+	switch kind {
+	case "stdout":
+		// stdout 出力にはクラスタリソースが対応しないため Build は空文字を返す。
+		// これにより state save 経路でも 0 entries となり state が書き込まれない。
+		return "", nil
+	case "kubernetesSecret":
+		secret := corev1.Secret{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Secret",
+				APIVersion: "v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: o.KubernetesSecret.Namespace,
+				Name:      o.KubernetesSecret.Name,
+			},
+		}
+		secret.SetLabels(o.KubernetesSecret.Labels)
+		secret.SetAnnotations(o.KubernetesSecret.Annotations)
+		secret.StringData = items
+		if o.KubernetesSecret.Type == "" {
+			secret.Type = corev1.SecretTypeOpaque
+		} else {
+			secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
+		}
+
+		out, err := yaml.Marshal(secret)
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+
+		return string(out), nil
+	}
+	return "", fmt.Errorf("unsupported output kind: %s", kind)
 }
 
 func merge(m1, m2 map[string]string) map[string]string {
