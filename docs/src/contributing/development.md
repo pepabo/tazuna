@@ -59,11 +59,11 @@ e2e は KinD クラスタを前提にしているため、`make test-e2e` を初
 | パス                | 役割 |
 |---------------------|------|
 | `main.go`           | エントリポイント。`cmd.Execute()` を呼ぶだけ。 |
-| `cmd/`              | Cobra のサブコマンド定義（`apply` / `build` / `check` / `destroy` / `state ...` / `secret-to-genesissecret` / `tags` / `version`）。 |
-| `cmd/internal/`     | サブコマンド間で共有する内部ユーティリティ。 |
-| `api/v1/`           | YAML スキーマに対応する Go 構造体定義（`tazuna.yaml` / `tazuna.hint.yaml` / GenesisSecret / TestPluginSpec / ORAS）。 |
-| `pkg/runner/`       | `tazuna apply` 全体のオーケストレーション。 |
-| `pkg/manager/`      | Manifest type 別の Manager 実装（`kustomize` / `helmfile` / `genesis_secret` / `parallel`、および `oras/` サブパッケージ）。 |
+| `cmd/`              | Cobra のサブコマンド定義（`apply` / `build` / `check` / `destroy` / `plan` / `status` / `state ...` / `secret-to-genesissecret` / `tags` / `version`）。 |
+| `cmd/internal/`     | サブコマンド間で共有する内部ユーティリティ（kubeconfig ロード、ロガー、OTLP tracer セットアップなど）。 |
+| `api/v1/`           | YAML スキーマに対応する Go 構造体定義（`tazuna.yaml` / `tazuna.hint.yaml` / GenesisSecret / TestPluginSpec / ORAS / Secret Provider）。 |
+| `pkg/runner/`       | `tazuna apply` 全体のオーケストレーション、`dependsOn` の DAG 解決、`plan` / `status` / `state diff` / `state drift` の実装。 |
+| `pkg/manager/`      | Manifest type 別の Manager 実装（`kustomize` / `helmfile` / `genesis_secret`、および `oras/` サブパッケージ）。 |
 | `pkg/state/`        | State の表現と ConfigMap 永続化。 |
 | `pkg/testplugin/`   | `WaitUntil` / `ExistNonExist` 実装。 |
 | `pkg/genesissecret/` | Provider インターフェースと 1Password 向け実装。 |

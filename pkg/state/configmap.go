@@ -76,7 +76,13 @@ func (s *ConfigMapStateStore) Get(ctx context.Context, manifestName string) (*St
 
 // Save はmanifest名に対応するステートをConfigMapに保存する。
 // ConfigMapが存在しない場合は新規作成、存在する場合は更新する。
+// state ConfigMap は tazuna namespace 配下に作成されるため、書き込み前に
+// namespace の存在を保証する (呼び出し側での ensure 忘れを防ぐ)。
 func (s *ConfigMapStateStore) Save(ctx context.Context, manifestName string, data *StateData) error {
+	if err := EnsureNamespace(ctx, s.client); err != nil {
+		return errors.Wrapf(err, "failed to ensure %s namespace before saving state", TazunaNamespace)
+	}
+
 	cmData, err := buildConfigMapData(data)
 	if err != nil {
 		return err

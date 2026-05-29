@@ -10,8 +10,8 @@
 
 | ステージ | 目的 | 走らせるコマンド | クラスタアクセス |
 |----------|------|------------------|------------------|
-| **検証** | `tazuna.yaml` が壊れていないことの保証 | `tazuna check`、`tazuna build` | なし |
-| **反映** | `main` の内容をクラスタに反映する | `tazuna apply`（または `tazuna state sync`） | あり |
+| **検証** | `tazuna.yaml` が壊れていないことの保証 | `tazuna check`、`tazuna build`、`tazuna plan` | `plan` のみあり（read-only） |
+| **反映** | `main` の内容をクラスタに反映する | `tazuna apply`（必要に応じて `--sync` / `--prune`） | あり |
 | **取り外し** | Tazuna 管理リソースを削除する | `tazuna destroy` | あり |
 
 「検証」は全 PR で走らせて構いません。「反映」は通常 `main` への push をトリガにします。
@@ -34,6 +34,21 @@
 PR で `build` 結果をアーティファクトに残しておくと、レビュー時に「最終的に何が apply されるか」を
 レンダリング結果ベースで確認できます。`type: oras` を使っているなら `--offline` を
 付けて先取り cache を使う構成も検討できます（[`tazuna build`](../reference/cli/build.md)）。
+
+クラスタへの read 権限を CI に渡せる場合は、`tazuna plan` を PR で回しておくと
+「実際に何のフィールドが変わるか」を unified diff で PR コメントに貼れます。
+
+```yaml
+- name: tazuna plan
+  if: github.event_name == 'pull_request'
+  run: tazuna plan -f tazuna.yaml > plan.txt
+- name: post plan to PR
+  if: github.event_name == 'pull_request'
+  run: |
+    gh pr comment "$PR_NUMBER" --body-file <(printf '```\n%s\n```\n' "$(cat plan.txt)")
+```
+
+`tazuna plan` は読み取り専用なので、PR の権限境界に乗せやすいのが利点です。
 
 ## 反映ステージ
 
@@ -75,27 +90,29 @@ jobs:
 - Tazuna は失敗時に非ゼロ終了するので、CI 側で特別なエラーハンドリングは不要です
   （[CLI - 終了コード](../reference/cli/index.md#終了コード)）。
 
-### `apply` か `state sync` か
+### `apply` の動作モード
 
-CI で回すコマンドには 2 通りあります。
+`tazuna apply` には 3 つの動作モードがあります（詳細は
+[`tazuna apply`](../reference/cli/apply.md#state-連携---sync----prune----atomic) を参照）。
 
-| コマンド | いつ何が走るか | drift 検知 |
-|----------|----------------|------------|
-| `tazuna apply` | `tazuna.yaml` で宣言された Manifest を **全部** Manager に通す | しない（毎回上書き） |
-| `tazuna state sync` | Build 結果と State を比較し、差分（`added` / `modified` / `always-sync`）だけ反映 | する |
+| モード                       | いつ何が走るか                                                          | drift 検知 |
+|------------------------------|-------------------------------------------------------------------------|------------|
+| `tazuna apply`               | `tazuna.yaml` の全 Manifest を Manager に通し、state を保存             | しない（毎回上書き） |
+| `tazuna apply --sync`        | Build 結果と State を比較し、差分（`added` / `modified` / `always-sync`）だけ反映 | する |
+| `tazuna apply --sync --prune`| 上記に加え、State にあって Build 結果に無いリソースを削除               | する |
 
 おおまかな指針:
 
 - ブートストラップ初期 / Manifest 数が少ない: `tazuna apply` が単純で予測しやすい。
-- Manifest 数が増えて 1 回の `apply` が重くなった: `tazuna state sync` で差分のみに絞る。
-- `removed` の自動削除が欲しい: `state sync` + `TAZUNA_STATE_SYNC_DELETE=true`。誤削除のリスクと相談。
+- Manifest 数が増えて 1 回の `apply` が重くなった: `--sync` で差分のみに絞る。
+- `removed` の自動削除が欲しい: `--sync --prune`。誤削除のリスクと相談。
 
 ### `--atomic` を使うか
 
-`tazuna state sync --atomic` を付けると、いずれかのリソースでエラーが出たときに
+`tazuna apply --sync --atomic` を付けると、いずれかのリソースでエラーが出たときに
 State を更新せず終了します。**反映自体は途中まで進む** ため、CI で「全部入ったか
 何も入らなかったか」の二値にはなりませんが、State 上の整合性は守れます。
-詳細は [`tazuna state sync`](../reference/cli/state-sync.md) を参照。
+詳細は [`tazuna apply`](../reference/cli/apply.md#state-連携---sync----prune----atomic) を参照。
 
 ## 取り外しステージ
 
@@ -135,6 +152,7 @@ CI で `apply` の成否を見るだけだと、「`tazuna.yaml` の更新が無
 - 仕様: [`tazuna apply`](../reference/cli/apply.md) /
   [`tazuna build`](../reference/cli/build.md) /
   [`tazuna check`](../reference/cli/check.md) /
-  [`tazuna state sync`](../reference/cli/state-sync.md)
+  [`tazuna plan`](../reference/cli/plan.md)
 - 事故防止: [`tazuna destroy` の運用](./destroy-runbook.md)
 - drift 検知: [Drift モニタリング](./drift-monitoring.md)
+- tracing: [オブザーバビリティ](./observability.md)

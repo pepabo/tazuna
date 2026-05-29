@@ -65,12 +65,13 @@ e2e の fixture は `test/e2e/testdata/` 配下にケースごとのディレク
 test/e2e/testdata/
 ├── kustomize-minimal/         # type: kustomize の最小ケース
 ├── helmfile-minimal/          # type: helmfile の最小ケース
-├── parallel-minimal/          # type: parallel
+├── dependson-minimal/         # dependsOn による DAG 実行
 ├── testplugin-minimal/        # Test plugin (WaitUntil/ExistNonExist) の基本
 ├── testplugin-cel/            # WaitUntil の CEL 式が複雑なケース
 ├── tags-filter-minimal/       # --tags フィルタ
-├── state-minimal/             # state list/diff/sync
+├── state-minimal/             # state list/diff、apply --sync
 ├── state-modified/            # state diff の "modified" 判定
+├── state-drift/               # state drift の live-drifted / live-missing
 ├── destroy-minimal/           # tazuna destroy
 └── check-invalid/             # tazuna check の異常系
 ```

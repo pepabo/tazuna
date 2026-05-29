@@ -2,7 +2,8 @@
 
 State は、Tazuna が「自分が入れたリソース」を追跡するための記録です。
 クラスタ内の **ConfigMap** に保存され、`tazuna state list` / `tazuna state diff` /
-`tazuna state sync` の起点になります。
+`tazuna state drift` / `tazuna status` / `tazuna plan` の起点になります。
+書き込みは `tazuna apply` の成功時に自動で行われます（`--sync` 有無を問わず）。
 
 このページでは State の保存形式と、それを支える State key / ContentHash / Diff type の
 仕様をまとめます。
@@ -109,15 +110,15 @@ Tazuna は **server-side で付与される field** と **`status`** を除い�
 
 ## Diff type
 
-`tazuna state diff` と `tazuna state sync` は、`Build` 結果と既存 State の比較結果を
+`tazuna state diff` と `tazuna apply --sync` は、`Build` 結果と既存 State の比較結果を
 **Diff type** で分類します。
 
-| Diff type     | 意味                                                    | `state sync` の挙動 |
-|---------------|---------------------------------------------------------|---------------------|
-| `added`       | Build 結果に存在し、State に無い                        | 反映する            |
-| `modified`    | 両方に存在するが、ContentHash が異なる                  | 反映する            |
-| `removed`     | State に存在し、Build 結果に無い                        | デフォルトはスキップ。`TAZUNA_STATE_SYNC_DELETE=true` のときだけ削除 |
-| `always-sync` | 差分計算をスキップし、常に同期扱いとする                 | 反映する            |
+| Diff type     | 意味                                                    | `apply --sync` の挙動 |
+|---------------|---------------------------------------------------------|-----------------------|
+| `added`       | Build 結果に存在し、State に無い                        | 反映する              |
+| `modified`    | 両方に存在するが、ContentHash が異なる                  | 反映する              |
+| `removed`     | State に存在し、Build 結果に無い                        | デフォルトはスキップ。`--prune` のときだけ削除 |
+| `always-sync` | 差分計算をスキップし、常に同期扱いとする                 | 反映する              |
 
 `state diff` の出力は **`added` → `modified` → `removed` → `always-sync`** の順、
 同 Diff type 内は State key 昇順で安定ソートされます。
@@ -131,7 +132,11 @@ Tazuna は **server-side で付与される field** と **`status`** を除い�
 ## 関連
 
 - 操作する CLI: [`tazuna state list`](./cli/state-list.md) /
-  [`tazuna state diff`](./cli/state-diff.md) / [`tazuna state sync`](./cli/state-sync.md)
+  [`tazuna state diff`](./cli/state-diff.md) /
+  [`tazuna state drift`](./cli/state-drift.md) /
+  [`tazuna status`](./cli/status.md) /
+  [`tazuna plan`](./cli/plan.md) /
+  [`tazuna apply --sync`](./cli/apply.md#state-連携---sync----prune----atomic)
 - 用語: [State](../concepts/glossary.md#state) /
   [State key](../concepts/glossary.md#state-key) /
   [ContentHash](../concepts/glossary.md#contenthash) /

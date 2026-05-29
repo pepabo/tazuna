@@ -23,6 +23,11 @@ func (t *TazunaRunner) Check(ctx context.Context, tazuna *v1.Tazuna, tazunaYAMLP
 		return err
 	}
 
+	// dependsOn の参照整合性と循環依存をチェックする
+	if err := validator.ValidateDependsOn(tazuna.Spec.Manifests); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -40,6 +45,11 @@ func (t *TazunaRunner) CheckAndFix(ctx context.Context, tazuna *v1.Tazuna, tazun
 	t.logger.DebugContext(ctx, "validating manifest names after fix", slog.Int("totalManifests", len(allManifests)))
 
 	if err := validator.ValidateManifestNames(allManifests); err != nil {
+		return err
+	}
+
+	// dependsOn の参照整合性と循環依存をチェックする
+	if err := validator.ValidateDependsOn(tazuna.Spec.Manifests); err != nil {
 		return err
 	}
 

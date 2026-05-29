@@ -9,7 +9,7 @@ ArgoCD などが並びますが、最初の 1 枚を理解するためには Man
 
 このガイドを終えると、次の状態になっています。
 
-- 自分のリポジトリに `tazuna.yaml` と kustomize ディレクトリが 1 セットある
+- `tazuna init` で生成した `tazuna.yaml` と kustomize ディレクトリが 1 セットある
 - `tazuna check` でその `tazuna.yaml` が妥当だと確認できる
 - `tazuna build` でクラスタに触れずに「何が入るか」を確認できる
 - `tazuna apply` でその内容がクラスタに反映されている
@@ -108,9 +108,35 @@ spec:
 で同じものをクラスタに入れることができます。Tazuna はあくまでこれを
 **宣言的に管理するための一段上の層** として乗せるだけ、と捉えておくと理解しやすくなります。
 
-## 2. tazuna.yaml を書く
+## 2. tazuna.yaml を生成して書く
 
-次に、Tazuna に対する「唯一の入力ファイル」である `tazuna.yaml` を書きます。
+次に、Tazuna に対する「唯一の入力ファイル」である `tazuna.yaml` を用意します。
+ゼロから手書きしてもよいのですが、雛形は `tazuna init` で生成するところから始めるのが楽です。
+
+```bash
+cd my-cluster
+tazuna init
+```
+
+`my-cluster/tazuna.yaml` が次の内容で作られます（コメント行は省略しています。
+`minimumSupportedTazunaVersion` の値は生成に使った tazuna のバージョンになります）。
+
+```yaml
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  minimumSupportedTazunaVersion: "1.4.0"
+  manifests: []
+```
+
+`tazuna init` を使う利点は、`apiVersion` / `kind` に加えて **`minimumSupportedTazunaVersion`**
+を自動で埋めてくれる点です。これは「この `tazuna.yaml` を処理するのに必要な tazuna の最小バージョン」で、
+これを下回る古い tazuna でうっかり処理しようとするとエラーで止まります。
+チームやリポジトリ間で tazuna のバージョンが混在しても事故りにくくなります
+（詳細は [`tazuna init`](../reference/cli/init.md) と
+[`minimumSupportedTazunaVersion`](../reference/tazuna-yaml.md#minimumsupportedtazunaversion) を参照）。
+
+あとは、生成された空の `manifests: []` を、今回入れたい nginx に置き換えます。
 
 `my-cluster/tazuna.yaml`:
 
@@ -118,6 +144,7 @@ spec:
 apiVersion: tazuna.pepabo.com/v1
 kind: Tazuna
 spec:
+  minimumSupportedTazunaVersion: "1.4.0"
   manifests:
     - name: nginx
       type: kustomize

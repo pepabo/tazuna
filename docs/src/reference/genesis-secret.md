@@ -36,7 +36,7 @@ spec:
 
 | フィールド  | 型                                              | 必須 | デフォルト | 説明 |
 |-------------|-------------------------------------------------|------|------------|------|
-| `provider`  | string                                          | -    | `""`       | 取得元 Provider の指定。**現バージョンの Manager は値を参照していません。** Provider は Tazuna 全体で 1 つ（1Password 向け実装）が組み込まれていて、`tazuna apply` の起動時に決定されます。 |
+| `provider`  | string                                          | -    | `""`       | 取得元 Provider の名前。`tazuna.yaml` の [`spec.providers[]`](./tazuna-yaml.md#providers) に宣言された `name` のいずれか、または組み込みの `default-op` を指定します。空文字のときは後方互換のため `default-op` にフォールバックします。詳細は [Secret provider](./secret-providers.md) を参照してください。 |
 | `secrets`   | [[GenesisSecretGenerate](#genesissecretgenerate)] | ◯ | -        | 取得対象。複数書けます。 |
 | `outputs`   | [[GenesisSecretOutput](#genesissecretoutput)]     | ◯ | -        | 出力先。複数書けます。 |
 
@@ -99,11 +99,32 @@ items:
 | フィールド          | 型                                                                          | 必須 | デフォルト | 説明 |
 |---------------------|-----------------------------------------------------------------------------|------|------------|------|
 | `kubernetesSecret`  | [GenesisSecretOutputKubernetesSecret](#genesissecretoutputkubernetessecret) | △ (※) | `null`   | 出力先として Kubernetes Secret を作る場合に指定します。 |
-| `stdout`            | object                                                                      | -    | `null`     | スキーマ上は存在しますが **現バージョンでは未対応** です。`kubernetesSecret` が `null` の場合は実行時にエラーになります。 |
+| `stdout`            | object                                                                      | △ (※) | `null`   | 取得した値を標準出力に dotenv 形式（`KEY=VALUE` 1 行 1 ペア、ソート済み）で書き出す場合に指定します。現状フィールドは空オブジェクト `{}` で構いません。 |
 
-(※) 現バージョンでは `outputs[]` の各要素は **`kubernetesSecret` を必須** とします。
-構造体上は `stdout` も存在しますが、`kubernetesSecret == nil` だと
-`.spec.output currently supports only KubernetesSecret` というエラーで失敗します。
+(※) `outputs[]` の各要素は `kubernetesSecret` か `stdout` の **どちらか一方** を
+指定する必要があります。両方を同時に指定したり、両方とも `null` の場合は
+バリデーションエラーになります。
+
+### `stdout`
+
+`stdout: {}` を指定した output は、Provider から取得した値を **dotenv 形式** で
+標準出力に書き出します。1Password で運用していた値を envfile に移行する作業や、
+シェル `eval` で環境変数として読み込みたいケースで使えます。
+
+```yaml
+outputs:
+  - stdout: {}
+```
+
+出力フォーマット:
+
+```text
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+行の並びは **キー名の昇順** で安定しています。
+クラスタには触らないため、`kubectl` の権限を持たないオペレーターでも実行できます。
 
 ### GenesisSecretOutputKubernetesSecret
 

@@ -91,9 +91,10 @@ TAZUNA_DESTROY_EXECUTABLE=true tazuna destroy --tags experimental
 
 リソースを「いま完全に消す」必要がない場合、次の選択肢があることを覚えておきます。
 
-- **`tazuna state sync` + `TAZUNA_STATE_SYNC_DELETE=true`** —
-  `tazuna.yaml` から Manifest を消したうえで `state sync` を打つと、`removed` 分類で
-  削除されます（[`tazuna state sync`](../reference/cli/state-sync.md)）。
+- **`tazuna apply --sync --prune`** —
+  `tazuna.yaml` から Manifest を消したうえで `apply --sync --prune` を打つと、
+  `removed` 分類で削除されます
+  （[`tazuna apply`](../reference/cli/apply.md#state-連携---sync----prune----atomic)）。
   `tazuna.yaml` のソースの真実を変えずに reset したいときには使えません。
 - **`--tags` で絞った destroy** — 上記参照。
 

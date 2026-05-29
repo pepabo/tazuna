@@ -27,8 +27,11 @@
 - **[State の内部構造](./state.md)** —
   State の保存先（`tazuna` namespace の ConfigMap）、State key の文字列形式、
   ContentHash の計算ルール、Diff type の分類仕様。
+- **[Secret provider](./secret-providers.md)** —
+  GenesisSecret から参照される Secret provider の宣言方法。組み込みの
+  `onepassword` / `envfile` の使い分けと、`spec.providers[]` の宣言、`default-op` 予約名。
 - **[Manifest type 別](./manifest-types/index.md)** —
-  `kustomize` / `helmfile` / `oras` / `parallel` / `genesissecret` の 5 type について、
+  `kustomize` / `helmfile` / `oras` / `genesissecret` の 4 type について、
   `path` の意味・固有フィールド・apply / destroy / build 時の振る舞いを 1 ページずつ。
 - **[CLI](./cli/index.md)** —
   `tazuna` バイナリのサブコマンド・グローバルフラグ・環境変数の仕様。

@@ -78,7 +78,7 @@ tazuna v0.1.0 (commit abc1234, built 2026-05-25T03:21:00Z, darwin/arm64)
 | `kubectl`            | -（推奨）                     | Tazuna 自身は使いませんが、`kubeconfig` 操作や反映結果の確認で使います。 |
 | `kustomize` / `helmfile` / `helm` バイナリ | -（不要） | Tazuna は Go ライブラリとして組み込んでいるため、外部バイナリのインストールは不要です。 |
 | 1Password CLI (`op`) | -（[`type: genesissecret`](../reference/manifest-types/genesissecret.md) や [helmfile.vars の `from: op`](../reference/manifest-types/helmfile.md#vars) を使うときのみ） | `op` コマンドが `PATH` にあり、サービスアカウントで認証されていることが前提です。 |
-| `git`                | -（任意） | `tazuna state sync` 時に `_metadata.gitCommitHash` を埋めるために使います。リポジトリ外で実行した場合や `git` が無い場合は、エラーにせず空文字で記録されます。 |
+| `git`                | -（任意） | `tazuna apply` 時に State の `_metadata.gitCommitHash` を埋めるために使います。リポジトリ外で実行した場合や `git` が無い場合は、エラーにせず空文字で記録されます。 |
 
 クラスタの選び方や `kubeconfig` の扱いについては、ガイドの
 [前提](../guides/first-tazuna-yaml.md#前提) でも触れています。

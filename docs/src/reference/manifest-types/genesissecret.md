@@ -40,12 +40,20 @@ manifests:
 | 操作      | 内部処理 |
 |-----------|----------|
 | `Build`   | GenesisSecret YAML を読み込み、Provider から値を取得し、`outputs[0].kubernetesSecret` 1 件分の Secret YAML を標準出力に書く。 |
-| `Apply`   | GenesisSecret YAML を読み込み、Provider から値を取得し、`outputs[].kubernetesSecret` の各エントリに対して Kubernetes Secret を `CreateOrUpdate` する。 |
-| `Destroy` | GenesisSecret YAML を読み込み（Provider 取得も実行されます）、`outputs[].kubernetesSecret` の `namespace` / `name` に該当する Secret を削除する。 |
+| `Apply`   | GenesisSecret YAML を読み込み、Provider から値を取得し、`outputs[]` の各エントリを処理する。`kubernetesSecret` は `CreateOrUpdate`、`stdout: {}` は dotenv 形式 (`KEY=VALUE` ソート済み) で標準出力に書き出す。 |
+| `Destroy` | GenesisSecret YAML を読み込み（Provider 取得も実行されます）、`outputs[].kubernetesSecret` の `namespace` / `name` に該当する Secret を削除する。`stdout` output は何もしない。 |
 
 `Build` は `outputs` の先頭 1 件のみを出力する点が `Apply` と異なります（複数 outputs を
 書いていても、`tazuna build` の出力は 1 件分です）。詳細は
 [GenesisSecret - 解決の流れ](../genesis-secret.md#解決の流れ) を参照してください。
+
+## Provider の選択
+
+GenesisSecret YAML の `spec.provider` で、どの Secret provider から値を取得するかを
+指定できます。空文字 / 未設定の場合は組み込みの `default-op`（1Password）が使われます。
+
+`tazuna.yaml` の `spec.providers[]` で複数の provider を宣言しておけば、`onepassword`
+と `envfile` を混ぜて使えます。詳細は [Secret provider](../secret-providers.md) を参照してください。
 
 ## State との関係
 

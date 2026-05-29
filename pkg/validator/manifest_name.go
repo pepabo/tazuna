@@ -55,14 +55,8 @@ func validateSingleManifestName(manifest *v1.Manifest, index int) error {
 }
 
 // CollectAllManifests はinclude展開後の全manifestをフラットなスライスとして収集する。
-// parallel内のchildrenも再帰的に収集する。
 func CollectAllManifests(manifests []v1.Manifest) []v1.Manifest {
 	var result []v1.Manifest
-	for _, m := range manifests {
-		result = append(result, m)
-		if m.Parallel != nil {
-			result = append(result, CollectAllManifests(m.Parallel.Children)...)
-		}
-	}
+	result = append(result, manifests...)
 	return result
 }
