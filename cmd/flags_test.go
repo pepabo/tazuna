@@ -148,8 +148,9 @@ func TestSubcommandsAreRegisteredOnRoot(t *testing.T) {
 func TestStateSubcommandsAreRegistered(t *testing.T) {
 	t.Parallel()
 	want := map[string]bool{
-		"list": true,
-		"diff": true,
+		"list":  true,
+		"diff":  true,
+		"drift": true,
 	}
 	for _, c := range stateCmd.Commands() {
 		delete(want, c.Name())
