@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -61,8 +62,14 @@ func (t *TazunaRunner) ApplyToCluster(
 	ctx context.Context,
 	tazuna v1.Tazuna,
 ) error {
-	// switchを書かずに処理を分けるためmapにmanagerを詰める
-	managers := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts)
+	// switchを書かずに処理を分けるためmapにmanagerを詰める。
+	// テストから WithManagersOverride で差し替えられた場合はそちらを優先する。
+	var managers map[string]manager.Manager
+	if t.managersOverride != nil {
+		managers = t.managersOverride
+	} else {
+		managers = setupManagers(t.k8sClient, t.opClient, t.orasPullOpts)
+	}
 	testPlugins := setupTestPlugins(t.k8sClient)
 
 	// state ConfigMapを書き込むためのstoreを準備する。
@@ -75,31 +82,65 @@ func (t *TazunaRunner) ApplyToCluster(
 	}
 	gitCommit := getGitCommitHash(ctx)
 
-	// sync モードでは atomic 時の state を一旦バッファし、全 manifest 処理後に保存する
+	// sync モードでは atomic 時の state を一旦バッファし、全 manifest 処理後に保存する。
+	// DAG モードでは同一層内のマニフェストが並列に書き込むため mutex で保護する。
 	pendingSaves := make(map[string]*state.StateData)
+	var pendingSavesMu sync.Mutex
 
-	for _, m := range tazuna.Spec.Manifests {
-		if len(t.tags) > 0 {
-			// タグが指定されている場合は、tagsに含まれるもののみを適用する
-			found := false
-			for _, tag := range t.tags {
-				found = found || slices.Contains(m.Tags, tag)
+	// dependsOn によるトポロジカル順序で manifests を層に分割する。
+	// dependsOn が一切使われていなければ層数 = manifest 数となり、従来の宣言順
+	// 順次実行と完全に同じ挙動になるため後方互換性が保たれる。
+	layers, err := ResolveDependencyOrder(tazuna.Spec.Manifests)
+	if err != nil {
+		return errors.Wrap(err, "failed to resolve manifest dependency order")
+	}
+
+	for layerIdx, layer := range layers {
+		// 各層内のマニフェストを並列実行する。1 マニフェストしか入っていない層
+		// (= dependsOn 未使用時の従来挙動) でも同じコードパスを通すことで挙動を
+		// シンプルに保つ。
+		errCh := make(chan error, len(layer))
+		var wg sync.WaitGroup
+		for _, m := range layer {
+			if len(t.tags) > 0 {
+				// タグが指定されている場合は、tagsに含まれるもののみを適用する
+				found := false
+				for _, tag := range t.tags {
+					found = found || slices.Contains(m.Tags, tag)
+				}
+
+				if !found {
+					t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+					continue
+				}
 			}
 
-			if !found {
-				t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
-				continue
-			}
+			wg.Add(1)
+			go func(m v1.Manifest) {
+				defer wg.Done()
+				if t.applyOpts.Sync {
+					if err := t.SyncManifest(ctx, m, managers, testPlugins, store, gitCommit, pendingSaves, &pendingSavesMu); err != nil {
+						errCh <- errors.WithStack(err)
+					}
+				} else {
+					if err := t.ApplyManifest(ctx, m, managers, testPlugins, store, gitCommit); err != nil {
+						errCh <- errors.WithStack(err)
+					}
+				}
+			}(m)
 		}
 
-		if t.applyOpts.Sync {
-			if err := t.SyncManifest(ctx, m, managers, testPlugins, store, gitCommit, pendingSaves); err != nil {
-				return errors.WithStack(err)
-			}
-		} else {
-			if err := t.ApplyManifest(ctx, m, managers, testPlugins, store, gitCommit); err != nil {
-				return errors.WithStack(err)
-			}
+		// 層内の全 goroutine が完了するのを待ってからエラーを集約する。
+		// 途中で goroutine を cancel するところまではしない (タスク要件)。
+		wg.Wait()
+		close(errCh)
+
+		var errs []error
+		for e := range errCh {
+			errs = append(errs, e)
+		}
+		if len(errs) > 0 {
+			return errors.Wrapf(errors.Join(errs...), "layer %d apply failed", layerIdx)
 		}
 	}
 
@@ -191,6 +232,7 @@ func (t *TazunaRunner) SyncManifest(
 	store state.StateStore,
 	gitCommit string,
 	pendingSaves map[string]*state.StateData,
+	pendingSavesMu *sync.Mutex,
 ) error {
 	// manifest名が未設定のものは state key を作れないためスキップする
 	if m.Name == "" {
@@ -310,7 +352,14 @@ func (t *TazunaRunner) SyncManifest(
 			Entries: newEntries,
 		}
 		if t.applyOpts.Atomic {
-			pendingSaves[m.Name] = newStateData
+			// DAG モードでは同一層内で並列に書き込むため mutex でガードする。
+			if pendingSavesMu != nil {
+				pendingSavesMu.Lock()
+				pendingSaves[m.Name] = newStateData
+				pendingSavesMu.Unlock()
+			} else {
+				pendingSaves[m.Name] = newStateData
+			}
 		} else {
 			if err := store.Save(ctx, m.Name, newStateData); err != nil {
 				return errors.Wrapf(err, "failed to save state for manifest %q", m.Name)

@@ -40,6 +40,9 @@ type TazunaRunner struct {
 	opClient     op.Client // OnePasswordのクライアント
 	orasPullOpts orasmanager.PullOptions
 	applyOpts    ApplyOptions
+	// managersOverride は主にテスト用途で manifest type -> Manager の差し替えを許容する。
+	// nil の場合は setupManagers() で生成した本物のマネージャーが使われる。
+	managersOverride map[string]manager.Manager
 }
 
 type RunnerOption func(*TazunaRunner)
@@ -138,5 +141,14 @@ func WithORASPullOptions(opts orasmanager.PullOptions) RunnerOption {
 func WithApplyOptions(opts ApplyOptions) RunnerOption {
 	return func(r *TazunaRunner) {
 		r.applyOpts = opts
+	}
+}
+
+// WithManagersOverride はテスト用にマネージャーマップを差し替えるオプションです。
+// 本番コードからは使わない想定で、依存関係や並列実行の挙動を fake manager で
+// 検証するためのフックを提供します。
+func WithManagersOverride(managers map[string]manager.Manager) RunnerOption {
+	return func(r *TazunaRunner) {
+		r.managersOverride = managers
 	}
 }
