@@ -13,8 +13,11 @@
   本番クラスタで destroy を打つときに踏むべき手順、`TAZUNA_DESTROY_EXECUTABLE`
   と `context_matches` の二段ガード、事故が起きやすいシナリオ。
 - **[Drift モニタリング](./drift-monitoring.md)** —
-  `tazuna state diff` を定期実行して drift を可視化する運用、出力フォーマットと
-  通知の組み立て方。
+  `tazuna state diff` と `tazuna state drift` を定期実行して 2 種類の drift を
+  可視化する運用、出力フォーマットと通知の組み立て方。
 - **[CI パイプライン](./ci-pipeline.md)** —
-  PR で `check` / `build`、`main` マージで `apply` を回す典型構成、
+  PR で `check` / `build` / `plan`、`main` マージで `apply` を回す典型構成、
   `destroy` の置き場、状態同期の選択。
+- **[オブザーバビリティ](./observability.md)** —
+  `--otlp-endpoint` で OpenTelemetry trace を export する設定、3 階層 trace tree
+  と主な span attribute の説明。

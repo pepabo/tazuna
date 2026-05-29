@@ -2,7 +2,7 @@
 
 このページは Tazuna への唯一の入力ファイルである `tazuna.yaml` の仕様をまとめます。
 ここでは Manifest type 別の固有フィールド（`kustomize` / `helmfile` /
-`genesissecret` / `parallel` / `oras`）と Test plugin のフィールドには深入りしません。
+`genesissecret` / `oras`）と Test plugin のフィールドには深入りしません。
 それらは順次、専用のリファレンスページで扱います。
 
 ## ルート (`Tazuna`)
@@ -32,10 +32,11 @@ spec:
 
 | フィールド             | 型                          | 必須 | デフォルト | 説明 |
 |------------------------|-----------------------------|------|------------|------|
-| `manifests`            | [[Manifest](#manifest)]    | ◯    | -          | Tazuna が順に処理する Manifest の配列。空配列は許容されません。 |
+| `manifests`            | [[Manifest](#manifest)]    | ◯    | -          | Tazuna が処理する Manifest の配列。空配列は許容されません。`dependsOn` が使われていれば依存グラフから導出した層順、未使用なら宣言順で実行されます。 |
 | `context_matches`      | [string]                    | -    | `[]`       | 現在の kubeconfig context 名がマッチすべき正規表現の配列。空でなければ `apply` / `destroy` 前に評価されます。 |
 | `context_match_mode`   | string                      | -    | `or`       | `context_matches` の評価モード。`or`（いずれかに一致）または `and`（すべてに一致）。 |
 | `tests`                | [[TestPluginSpec](#tests-フィールド)] | - | `[]` | すべての Manifest 適用後に実行される Test plugin の配列。 |
+| `providers`            | [[ProviderConfig](#providers)] | - | `[]`      | GenesisSecret から参照される Secret provider の宣言リスト。組み込みの `default-op` 以外を使う場合に書きます。 |
 
 ### `context_matches`
 
@@ -71,14 +72,14 @@ spec:
 |-----------------|-----------------------------------|------|------------|------|
 | `name`          | string                            | ◯    | -          | Manifest 識別子。`^[a-zA-Z0-9_-]+$` にマッチする必要があり、`includes` 展開後の全 Manifest 間でユニーク。`_metadata` は予約済みで使用不可。 |
 | `description`   | string                            | -    | `""`       | 人間向けの説明。挙動には影響しません。 |
-| `type`          | string                            | △ (※) | -        | `kustomize` / `helmfile` / `genesissecret` / `parallel` / `oras` のいずれか。 |
+| `type`          | string                            | △ (※) | -        | `kustomize` / `helmfile` / `genesissecret` / `oras` のいずれか。 |
 | `path`          | string                            | △ (※) | -        | `tazuna.yaml` 自身の置かれているディレクトリ起点の相対パス。 |
 | `tags`          | [string]                          | -    | `[]`       | `tazuna apply --tags ...` などで絞り込みに使うタグ。OR 評価。 |
+| `dependsOn`     | [string]                          | -    | `[]`       | この Manifest の apply 前に完了している必要がある Manifest 名のリスト。詳細は [`dependsOn`](#dependson) 参照。 |
 | `includes`      | [[IncludeFile](#includefile)]     | -    | `[]`       | 別の `tazuna.yaml` を読み込むエントリ。設定時は他の Manifest 固有フィールドは無視されます。詳細は [includes を使う](#includes-を使う) を参照。 |
 | `kustomize`     | [ManifestKustomize](#manifest-type-別フィールド) | - | `null` | `type: kustomize` のときに参照されるオプション。 |
 | `helmfile`      | [ManifestHelmfile](#manifest-type-別フィールド)  | - | `null` | `type: helmfile` のときに参照されるオプション。 |
 | `genesisSecret` | object                            | -    | `null`     | `type: genesissecret` のときに参照されるオプション。現状は空オブジェクト。 |
-| `parallel`      | [ManifestParallel](#manifest-type-別フィールド)  | - | `null` | `type: parallel` のときに参照されるオプション。`children[]` に Manifest を入れ子で書く。 |
 | `oras`          | [ManifestORAS](#manifest-type-別フィールド)      | - | `null` | `type: oras` のときに参照されるオプション。 |
 | `tests`         | [TestPluginSpec]                  | -    | `[]`       | この Manifest の apply 後に実行される Test plugin の配列。 |
 
@@ -110,7 +111,6 @@ spec:
 | `kustomize`     | `kustomization.yaml` を含むディレクトリ |
 | `helmfile`      | `helmfile.yaml` を含むディレクトリ |
 | `genesissecret` | GenesisSecret 定義 YAML **ファイル**（ディレクトリではない） |
-| `parallel`      | 実体としては使用されません。`children[]` 側の `path` が使われます。バリデーション都合で空にはできません。 |
 | `oras`          | 実体としては使用されません。バリデーション都合で空にはできないため、適当なディレクトリを書きます。 |
 
 詳細な解釈は各 [Manifest type 別ページ](./manifest-types/index.md) を参照してください。
@@ -126,6 +126,67 @@ spec:
 - 文字列の配列。Tazuna 自身は内容を解釈しません。
 - `--tags` フラグでの絞り込み時に、**指定されたタグのいずれかが付いている** Manifest
   だけが処理対象になります（OR 評価）。
+
+### `dependsOn`
+
+- この Manifest を apply する前に **必ず完了している必要がある** Manifest 名の配列。
+- `includes` 展開後の全 Manifest 集合に含まれる名前でなければなりません。
+- 自分自身を含めることはできません（自己依存は循環の特殊例として弾かれます）。
+- 全体の依存関係に循環が含まれていてはなりません。
+- `tazuna.yaml` 内で 1 つでも `dependsOn` が使われていれば Runner は DAG モードに
+  切り替わり、同じ依存深度の Manifest を **並列に** 実行します。1 つも使われていなければ
+  従来通り宣言順 1 件ずつの実行になります。
+
+詳細と動機は [`dependsOn` による DAG 実行](../concepts/depends-on.md) を参照してください。
+
+例:
+
+```yaml
+spec:
+  manifests:
+    - name: cni
+      type: kustomize
+      path: ./cni
+    - name: cert-manager
+      type: helmfile
+      path: ./cert-manager
+      dependsOn: [cni]
+    - name: ingress
+      type: helmfile
+      path: ./ingress
+      dependsOn: [cni]
+    - name: app
+      type: kustomize
+      path: ./app
+      dependsOn: [cert-manager, ingress]
+```
+
+## Providers
+
+`spec.providers[]` は GenesisSecret から参照される Secret provider の宣言リストです。
+組み込みの `default-op`（1Password）以外を使う、または provider を複数並べて使い分けたい
+ときに書きます。
+
+```yaml
+spec:
+  providers:
+    - name: primary-op
+      type: onepassword
+      onepassword: {}
+    - name: ops-envfile
+      type: envfile
+      envfile:
+        path: ./secrets/ops.env
+```
+
+| フィールド    | 型     | 必須 | デフォルト | 説明 |
+|---------------|--------|------|------------|------|
+| `name`        | string | ◯    | -          | GenesisSecret の `spec.provider` から参照される名前。`default-op` は予約名で使用不可。 |
+| `type`        | string | ◯    | -          | provider 種別。`onepassword` または `envfile`。 |
+| `onepassword` | object | △    | `null`     | `type: onepassword` のときに使う追加設定（現状は空オブジェクト）。 |
+| `envfile`     | object | △    | `null`     | `type: envfile` のときに使う追加設定。`path` を持つ。 |
+
+詳細は [Secret provider](./secret-providers.md) を参照してください。
 
 ## IncludeFile
 
@@ -157,7 +218,7 @@ spec:
 ## Manifest type 別フィールド
 
 `type` に対応するフィールド（`kustomize` / `helmfile` / `genesisSecret` /
-`parallel` / `oras`）は、それぞれ専用のリファレンスページに切り出しています。
+`oras`）は、それぞれ専用のリファレンスページに切り出しています。
 
 ここでは存在と最低限の役割だけを示します。
 
@@ -166,7 +227,6 @@ spec:
 | `kustomize`     | [`type: kustomize`](./manifest-types/kustomize.md) 向けオプション。`defaultNamespace` を持つ。 |
 | `helmfile`      | [`type: helmfile`](./manifest-types/helmfile.md) 向けオプション。`vars` / `includeCRDs` / `wait` / `kubeVersion` などを持つ。 |
 | `genesisSecret` | [`type: genesissecret`](./manifest-types/genesissecret.md) 向けの拡張点。現バージョンでは空オブジェクト。 |
-| `parallel`      | [`type: parallel`](./manifest-types/parallel.md) 向けオプション。`children[]` に Manifest を入れる。 |
 | `oras`          | [`type: oras`](./manifest-types/oras.md) 向けオプション。`reference` / `delegate` を持つ。 |
 
 ## `tests` フィールド
@@ -187,14 +247,16 @@ spec:
 - `spec.manifests[]` の各要素について:
   - `includes` が無い場合: `path` と `type` が設定されていること。
   - `type` が既知の値（`kustomize` / `helmfile` / `genesissecret` /
-    `parallel` / `oras`）であること。
+    `oras`）であること。
   - `path` の指す場所が実在すること。
 - `spec.manifests[].name` が必須・使用可能文字・ユニーク・予約語禁止を満たすこと。
+- `spec.manifests[].dependsOn` が既存 Manifest 名のみを参照し、自己参照・循環依存を含まないこと。
 - `spec.context_matches` が正規表現としてコンパイル可能であること。
 - `spec.context_match_mode` が `or` / `and` / 未設定のいずれかであること。
+- `spec.providers[]` の各要素について: `name` がユニークかつ非空、`default-op` を含まないこと、
+  `type` が `onepassword` / `envfile` のいずれかであること、`type` と整合した config を持つこと。
 - `type: helmfile` の場合: `helmfile.vars` の各値が `env` / `static` / `op` の
   いずれかを満たすこと（詳細は helmfile のリファレンスページ）。
-- `type: parallel` の場合: `parallel.children[]` が空でなく、各 child も妥当な Manifest であること。
 - `type: oras` の場合: `oras.reference` が必須、`oras.delegate.type` が
   `helmfile` / `kustomize` のいずれかであること。
 - `includes` を指定する場合: 各 `include.path` が必須で、ファイルが実在すること。

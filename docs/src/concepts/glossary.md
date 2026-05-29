@@ -16,7 +16,8 @@ Kubernetes における「マニフェスト」（YAML ファイル）とは指�
 
 ### Manifest type
 Manifest の処理方法を指定する文字列。
-`kustomize` / `helmfile` / `genesissecret` / `parallel` / `oras` の 5 種類。
+`kustomize` / `helmfile` / `genesissecret` / `oras` の 4 種類。
+以前あった `parallel` は `dependsOn` ベースの DAG 実行へ置き換えられて削除されています。
 
 ### Manager
 ある Manifest type に対する処理を担うコンポーネント。
@@ -67,7 +68,30 @@ Kubernetes CRD ではなく、Tazuna が読む YAML スキーマ。
 
 ### Provider (SecretProvider)
 GenesisSecret が秘匿情報を取り出す元を抽象化したインターフェース。
-現状は 1Password (`op`) 向けの実装が組み込まれている。
+組み込みで 1Password (`onepassword`) と envfile (`envfile`) の 2 種類が利用でき、
+`tazuna.yaml` の `spec.providers[]` で複数宣言・GenesisSecret 側の `spec.provider` で
+名前指定して使い分けられる。詳細は [Secret provider](../reference/secret-providers.md) を参照。
+
+### `default-op`
+組み込みの 1Password provider に予約された名前。
+GenesisSecret の `spec.provider` が空文字のときに後方互換のためフォールバックされる。
+`spec.providers[]` でこの名前を再宣言することはできない。
+
+### `dependsOn`
+`manifests[]` のエントリで、その Manifest を apply する前に完了している必要がある
+Manifest 名のリスト。`tazuna.yaml` 内に 1 つでも `dependsOn` が書かれていれば
+Runner は DAG モードに切り替わり、同じ依存深度の Manifest を並列に実行する。
+詳細は [`dependsOn` による DAG 実行](./depends-on.md) を参照。
+
+### Layer (DAG 層)
+`dependsOn` を解決した結果として導出される、**並列に実行可能な Manifest の集合**。
+同一層に属する Manifest は互いに依存しておらず、Runner が goroutine で並列に
+apply する。層単位の境界では待ち合わせが入るため、層をまたいだ順序保証は崩れない。
+
+### `live-drifted` / `live-missing`
+`tazuna state drift` が出力する drift 分類。`live-drifted` は State の hash と
+ライブクラスタの hash が一致しないリソース、`live-missing` は State に記録は
+あるがライブクラスタから NotFound のリソース。
 
 ### `context_matches`
 `tazuna.yaml` の `spec.context_matches`。
