@@ -122,11 +122,9 @@ func (t *TazunaRunner) ApplyToCluster(
 	// state ConfigMapを書き込むためのstoreを準備する。
 	// apply完了後にmanifest単位でstateを保存し、`state list` / `state diff` から
 	// 適用済みリソースを追跡できるようにする。
+	// state ConfigMapはtazuna namespace配下に作成されるが、namespaceの存在保証は
+	// ConfigMapStateStore.Save 側で行うため、ここでは明示的に ensure しない。
 	store := state.NewConfigMapStateStore(t.k8sClient)
-	// state ConfigMapはtazuna namespace配下に作成されるため、事前に存在保証する
-	if err := state.EnsureNamespace(ctx, t.k8sClient); err != nil {
-		return errors.Wrapf(err, "failed to ensure tazuna namespace")
-	}
 	gitCommit := getGitCommitHash(ctx)
 
 	// sync モードでは atomic 時の state を一旦バッファし、全 manifest 処理後に保存する。
