@@ -19,20 +19,39 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GenesisSecret managerはGenesisSecretのapplyに関する諸々をやります
+// GenesisSecret managerはGenesisSecretのapplyに関する諸々をやります。
+// SecretProvider の解決は registry 経由で manifest の .spec.provider を
+// name として動的に lookup します。
 type GenesisSecret struct {
 	client   client.Client
-	provider genesissecret.SecretProvider
+	registry *genesissecret.ProviderRegistry
 }
 
+// NewGenesisSecret は GenesisSecret manager を生成します。
+// registry には少なくとも組み込みの "default-op" provider が登録されている想定です。
+// GenesisSecret の .spec.provider が空文字の manifest は "default-op" にフォールバック
+// されることで後方互換性が保たれます。
 func NewGenesisSecret(
-	client client.Client,
-	provider genesissecret.SecretProvider,
+	c client.Client,
+	registry *genesissecret.ProviderRegistry,
 ) *GenesisSecret {
 	return &GenesisSecret{
-		client:   client,
-		provider: provider,
+		client:   c,
+		registry: registry,
 	}
+}
+
+// resolveProvider は GenesisSecret manifest の .spec.provider 値から
+// SecretProvider を取得します。空文字の場合は組み込みの "default-op" に
+// フォールバックすることで、既存 fixture との後方互換を維持します。
+func (g *GenesisSecret) resolveProvider(name string) (genesissecret.SecretProvider, error) {
+	if g.registry == nil {
+		return nil, fmt.Errorf("provider registry is not initialized")
+	}
+	if name == "" {
+		name = v1.DefaultOnePasswordProviderName
+	}
+	return g.registry.Get(name)
 }
 
 // Apply implements Manager.
@@ -47,9 +66,14 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 		return errors.WithStack(err)
 	}
 
+	provider, err := g.resolveProvider(genesisSecret.Spec.Provider)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
 	items := map[string]string{}
 	for _, s := range genesisSecret.Spec.Secrets {
-		i, err := g.provider.Fetch(ctx, s)
+		i, err := provider.Fetch(ctx, s)
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -103,9 +127,14 @@ func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.M
 		return errors.WithStack(err)
 	}
 
+	provider, err := g.resolveProvider(genesisSecret.Spec.Provider)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+
 	items := map[string]string{}
 	for _, s := range genesisSecret.Spec.Secrets {
-		i, err := g.provider.Fetch(ctx, s)
+		i, err := provider.Fetch(ctx, s)
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -152,9 +181,14 @@ func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Man
 		return "", errors.WithStack(err)
 	}
 
+	provider, err := g.resolveProvider(genesisSecret.Spec.Provider)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+
 	items := map[string]string{}
 	for _, s := range genesisSecret.Spec.Secrets {
-		i, err := g.provider.Fetch(ctx, s)
+		i, err := provider.Fetch(ctx, s)
 		if err != nil {
 			return "", errors.WithStack(err)
 		}
