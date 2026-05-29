@@ -9,6 +9,7 @@
 
 ## サブコマンド一覧
 
+- [`tazuna init`](./init.md) — includes ベースの `tazuna.yaml` 雛形を生成する
 - [`tazuna apply`](./apply.md) — `tazuna.yaml` をクラスタに反映する（state を書き戻す）
 - [`tazuna build`](./build.md) — クラスタに触らずにレンダリング結果を出力する
 - [`tazuna check`](./check.md) — `tazuna.yaml` の妥当性を検証する
@@ -61,6 +62,12 @@ kubectl と同じ解決ルールに従います。
 `tazuna.yaml` をロードしてバリデーションします。
 バリデーションで失敗するとクラスタには触れません。
 チェック項目の一覧は [`tazuna.yaml` スキーマ - バリデーションのまとめ](../tazuna-yaml.md#バリデーションのまとめ) を参照。
+
+加えて、`tazuna.yaml` をロードする **すべて** のコマンド（上記に `plan` / `status` /
+`state list` / `state diff` / `state drift` を含む）で、ロード時点で
+`spec.minimumSupportedTazunaVersion` と実行中の tazuna のバージョンが比較されます。
+実行中のバージョンが下回る場合はその場でエラー終了します。詳細は
+[`tazuna.yaml` スキーマ - `minimumSupportedTazunaVersion`](../tazuna-yaml.md#minimumsupportedtazunaversion) を参照。
 
 ### 終了コード
 

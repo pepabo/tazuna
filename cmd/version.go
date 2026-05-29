@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"github.com/pepabo/tazuna/cmd/internal/cliutil"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,9 @@ func SetVersionInfo(version, commit, date string) {
 	if version != "" {
 		versionString = version
 	}
+	// LoadTazunaYAML での minimumSupportedTazunaVersion 比較に使うため、
+	// 実行中バージョンを cliutil 側へ伝播させる。
+	cliutil.SetCurrentVersion(versionString)
 	if commit != "" {
 		commitString = commit
 	}

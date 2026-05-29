@@ -29,6 +29,12 @@ const (
 )
 
 type TazunaSpec struct {
+	// MinimumSupportedTazunaVersion はこの tazuna.yaml を処理するのに必要な
+	// tazuna バイナリの最小バージョンを semver 形式で宣言します（例: "1.4.0"）。
+	// 指定した場合、tazuna.yaml を読み込んだ任意の操作で、実行中の tazuna の
+	// バージョンがこの値を下回るとエラーで終了します。未指定なら制約はありません。
+	// 先頭の "v" は許容されます（"v1.4.0" も可）。
+	MinimumSupportedTazunaVersion string `json:"minimumSupportedTazunaVersion,omitempty"`
 	// ContextMatchesは現在のkubeconfigコンテキスト名がマッチすべき正規表現パターンのリストです
 	// 指定した場合、apply/destroy時にコンテキスト名がパターンにマッチしないとエラーになります
 	ContextMatches []string `json:"context_matches,omitempty"`

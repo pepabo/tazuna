@@ -27,6 +27,7 @@
     - [`type: oras`](./reference/manifest-types/oras.md)
     - [`type: genesissecret`](./reference/manifest-types/genesissecret.md)
   - [CLI](./reference/cli/index.md)
+    - [`tazuna init`](./reference/cli/init.md)
     - [`tazuna apply`](./reference/cli/apply.md)
     - [`tazuna build`](./reference/cli/build.md)
     - [`tazuna check`](./reference/cli/check.md)

@@ -32,11 +32,31 @@ spec:
 
 | フィールド             | 型                          | 必須 | デフォルト | 説明 |
 |------------------------|-----------------------------|------|------------|------|
+| `minimumSupportedTazunaVersion` | string             | -    | `""`       | この `tazuna.yaml` を処理するのに必要な tazuna バイナリの最小バージョン（semver）。詳細は [`minimumSupportedTazunaVersion`](#minimumsupportedtazunaversion) 参照。 |
 | `manifests`            | [[Manifest](#manifest)]    | ◯    | -          | Tazuna が処理する Manifest の配列。空配列は許容されません。`dependsOn` が使われていれば依存グラフから導出した層順、未使用なら宣言順で実行されます。 |
 | `context_matches`      | [string]                    | -    | `[]`       | 現在の kubeconfig context 名がマッチすべき正規表現の配列。空でなければ `apply` / `destroy` 前に評価されます。 |
 | `context_match_mode`   | string                      | -    | `or`       | `context_matches` の評価モード。`or`（いずれかに一致）または `and`（すべてに一致）。 |
 | `tests`                | [[TestPluginSpec](#tests-フィールド)] | - | `[]` | すべての Manifest 適用後に実行される Test plugin の配列。 |
 | `providers`            | [[ProviderConfig](#providers)] | - | `[]`      | GenesisSecret から参照される Secret provider の宣言リスト。組み込みの `default-op` 以外を使う場合に書きます。 |
+
+### `minimumSupportedTazunaVersion`
+
+- この `tazuna.yaml` を安全に処理できる tazuna バイナリの **最小バージョン** を
+  semver 形式で宣言します（例: `1.4.0`）。先頭の `v` は許容されます（`v1.4.0` も可）。
+- `tazuna.yaml` を読み込む **任意の操作**（`apply` / `destroy` / `plan` / `build` /
+  `check` / `status` / `tags` / `state *` など）で、実行中の tazuna のバージョンが
+  この値を **下回る** とエラーで終了します。新しい記法を要求する `tazuna.yaml` を
+  古いバイナリで誤って処理してしまう事故を防ぎます。
+- 未設定（空文字）の場合は制約なしです。
+- 値が semver として不正な場合は設定エラーになります。
+- 実行中の tazuna がローカルビルド（`dev` など semver でないバージョン）の場合は
+  比較をスキップします。ローカル開発がこのゲートでブロックされないようにするためです。
+
+```yaml
+spec:
+  minimumSupportedTazunaVersion: "1.4.0"
+  manifests: []
+```
 
 ### `context_matches`
 
@@ -244,6 +264,9 @@ spec:
 **クラスタには触れず**、ここで失敗するものはすべて事前に弾けます。
 
 - `apiVersion` / `kind` を設定するなら値が正規値と完全一致すること。
+- `spec.minimumSupportedTazunaVersion` を設定するなら semver として妥当で、実行中の
+  tazuna のバージョンがそれ以上であること（ローカルビルドは比較をスキップ）。なお
+  この検証は `check` に限らず、`tazuna.yaml` を読み込むすべての操作で実行されます。
 - `spec.manifests[]` の各要素について:
   - `includes` が無い場合: `path` と `type` が設定されていること。
   - `type` が既知の値（`kustomize` / `helmfile` / `genesissecret` /
