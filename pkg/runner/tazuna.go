@@ -14,6 +14,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// ApplyOptions は apply の挙動を切り替えるオプション群。
+//
+// Sync が true のとき、state を参照した差分適用モードになる。state を読んで Build()
+// 出力との diff を取り、追加/変更のみを CreateOrUpdate する。差分ゼロのリソースは
+// スキップする。
+//
+// Prune が true のとき、removed (state にあるが manifest に無い) リソースを Delete
+// する。Sync が前提で、単独で指定された場合は呼び出し側でエラーにすること。
+//
+// Atomic が true のとき、Sync 時の state 保存を全 manifest 処理完了後にまとめて行う。
+type ApplyOptions struct {
+	Sync   bool
+	Prune  bool
+	Atomic bool
+}
+
 // TazunaRunner はTazuna操作を管理するオーバーオールな構造体
 // これを用意し、各コマンドからはこの構造体を通して操作することで、
 // Tazunaのロジックをそれぞれ拡張してビルドし、利用できるようにします
@@ -23,6 +39,7 @@ type TazunaRunner struct {
 	k8sClient    client.Client
 	opClient     op.Client // OnePasswordのクライアント
 	orasPullOpts orasmanager.PullOptions
+	applyOpts    ApplyOptions
 }
 
 type RunnerOption func(*TazunaRunner)
@@ -113,5 +130,13 @@ func WithTags(tags []string) RunnerOption {
 func WithORASPullOptions(opts orasmanager.PullOptions) RunnerOption {
 	return func(r *TazunaRunner) {
 		r.orasPullOpts = opts
+	}
+}
+
+// WithApplyOptions は apply の挙動オプション (--sync / --prune / --atomic) を設定します。
+// 既存呼び出しを壊さないため、未指定時はゼロ値 (= 従来挙動) のままになります。
+func WithApplyOptions(opts ApplyOptions) RunnerOption {
+	return func(r *TazunaRunner) {
+		r.applyOpts = opts
 	}
 }
