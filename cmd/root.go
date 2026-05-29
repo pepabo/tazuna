@@ -18,6 +18,7 @@ Main subcommands:
   build                    Generate the manifests that would be applied and print them to stdout
   check                    Validate tazuna.yaml
   destroy                  Delete tazuna-managed resources from the cluster
+  plan                     Show per-field diffs between manifests and the live cluster
   tags                     List the tags defined in tazuna.yaml
   secret-to-genesissecret  Save existing Secrets to 1Password and generate GenesisSecret
   version                  Print version, commit, and build date`,
