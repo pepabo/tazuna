@@ -69,6 +69,13 @@ type Manifest struct {
 	Helmfile      *ManifestHelmfile      `json:"helmfile,omitempty"`
 	Parallel      *ManifestParallel      `json:"parallel,omitempty"`
 	ORAS          *ManifestORAS          `json:"oras,omitempty"`
+	// DependsOn はこのマニフェスト適用前に完了している必要があるマニフェスト名のリスト。
+	// dependsOn に列挙された全マニフェストが apply 成功した後でのみ、このマニフェストの
+	// apply が開始される。同じ層に属するマニフェスト (依存関係上同じ深度) は並列に
+	// 適用される。dependsOn が tazuna.yaml 内で一度も使われていなければ従来通りの
+	// 宣言順・順次実行となるため後方互換性が保たれる。
+	// 自分自身の参照、未知のマニフェスト名、循環依存はいずれもバリデーションエラー。
+	DependsOn []string `json:"dependsOn,omitempty"`
 	// Testsはマニフェストapply後に行われる各種テストを記載します
 	Tests []TestPluginSpec `json:"tests"`
 }
