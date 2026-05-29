@@ -57,6 +57,9 @@ func TestSubcommandFlags(t *testing.T) {
 				{name: "tags", defaultVal: "[]"},
 				{name: "no-cache", defaultVal: "false"},
 				{name: "offline", defaultVal: "false"},
+				{name: "sync", defaultVal: "false"},
+				{name: "prune", defaultVal: "false"},
+				{name: "atomic", defaultVal: "false"},
 			},
 		},
 		{
@@ -86,12 +89,6 @@ func TestSubcommandFlags(t *testing.T) {
 			cmd: tagsCmd,
 			flags: []flagSpec{
 				{name: "tags", defaultVal: "[]"},
-			},
-		},
-		{
-			cmd: stateSyncCmd,
-			flags: []flagSpec{
-				{name: "atomic", defaultVal: "false"},
 			},
 		},
 		{
@@ -153,12 +150,20 @@ func TestStateSubcommandsAreRegistered(t *testing.T) {
 	want := map[string]bool{
 		"list": true,
 		"diff": true,
-		"sync": true,
 	}
 	for _, c := range stateCmd.Commands() {
 		delete(want, c.Name())
 	}
 	if len(want) != 0 {
 		t.Errorf("state subcommands missing: %v", want)
+	}
+}
+
+func TestStateSyncSubcommandIsRemoved(t *testing.T) {
+	t.Parallel()
+	for _, c := range stateCmd.Commands() {
+		if c.Name() == "sync" {
+			t.Errorf("state sync subcommand should not exist after merge into apply")
+		}
 	}
 }

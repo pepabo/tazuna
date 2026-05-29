@@ -22,13 +22,27 @@ Each manifest is processed in declaration order, and tests are run after the app
 when test plugins are configured. The --tags flag limits processing to manifests
 that carry the specified tags.
 
+With --sync, apply switches to differential mode: each manager's Build() output is
+diffed against the saved state, and only added/modified resources are applied.
+Resources whose hash has not changed are skipped.
+
+With --prune (requires --sync), resources that exist in the state but not in the
+current manifest output are deleted from the cluster.
+
+With --atomic (requires --sync), state is saved only after all manifests have been
+processed successfully; if any error occurs, the previously stored state is left
+untouched.
+
 The target cluster is determined by the kubeconfig context.
 When context_matches is configured, the current context name is validated.
 
 Examples:
   tazuna apply -f tazuna.yaml
   tazuna apply -f tazuna.yaml --tags web,batch
-  tazuna apply -f tazuna.yaml --log-level debug`,
+  tazuna apply -f tazuna.yaml --log-level debug
+  tazuna apply -f tazuna.yaml --sync
+  tazuna apply -f tazuna.yaml --sync --prune
+  tazuna apply -f tazuna.yaml --sync --atomic`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
@@ -52,7 +66,41 @@ Examples:
 			return err
 		}
 
-		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts))
+		sync, err := cmd.Flags().GetBool("sync")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		prune, err := cmd.Flags().GetBool("prune")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		atomic, err := cmd.Flags().GetBool("atomic")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
+		// --prune / --atomic は --sync 必須。CLI 層で早期に弾く。
+		if prune && !sync {
+			return errors.New("--prune requires --sync")
+		}
+		if atomic && !sync {
+			return errors.New("--atomic requires --sync")
+		}
+
+		applyOpts := runner.ApplyOptions{
+			Sync:   sync,
+			Prune:  prune,
+			Atomic: atomic,
+		}
+
+		r := runner.NewTazunaRunner(
+			logger,
+			k8sClient,
+			&op.CommandClient{},
+			runner.WithTags(tags),
+			runner.WithORASPullOptions(orasOpts),
+			runner.WithApplyOptions(applyOpts),
+		)
 
 		tazuna, err := cliutil.LoadTazunaYAML(path)
 		if err != nil {
@@ -80,6 +128,9 @@ Examples:
 func init() {
 	addTagsFlag(applyCmd, "Filter manifests by tag; only matching tags are applied")
 	addORASPullFlags(applyCmd)
+	applyCmd.Flags().Bool("sync", false, "Enable differential apply: only added/modified resources are applied based on the saved state")
+	applyCmd.Flags().Bool("prune", false, "Delete resources that exist in the state but not in the current manifest output (requires --sync)")
+	applyCmd.Flags().Bool("atomic", false, "Save state only after all manifests succeed; leaves the state untouched on error (requires --sync)")
 	rootCmd.AddCommand(applyCmd)
 
 }

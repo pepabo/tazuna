@@ -14,9 +14,11 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/manager"
 	"github.com/pepabo/tazuna/pkg/manifest"
+	"github.com/pepabo/tazuna/pkg/resource"
 	"github.com/pepabo/tazuna/pkg/state"
 	"github.com/pepabo/tazuna/pkg/testplugin"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
@@ -25,6 +27,15 @@ func (t *TazunaRunner) Apply(
 	tazuna v1.Tazuna,
 	tazunaYAMLPath string,
 ) error {
+	// --prune は --sync 必須。Runner 層でもガードしておくことで、
+	// CLI 以外から呼ばれた場合 (テスト等) の安全策にする。
+	if t.applyOpts.Prune && !t.applyOpts.Sync {
+		return errors.New("prune requires sync mode")
+	}
+	if t.applyOpts.Atomic && !t.applyOpts.Sync {
+		return errors.New("atomic requires sync mode")
+	}
+
 	// includesフィールドがあるマニフェストを展開する
 	if err := t.expandIncludes(ctx, &tazuna, tazunaYAMLPath); err != nil {
 		return errors.WithStack(err)
@@ -64,6 +75,9 @@ func (t *TazunaRunner) ApplyToCluster(
 	}
 	gitCommit := getGitCommitHash(ctx)
 
+	// sync モードでは atomic 時の state を一旦バッファし、全 manifest 処理後に保存する
+	pendingSaves := make(map[string]*state.StateData)
+
 	for _, m := range tazuna.Spec.Manifests {
 		if len(t.tags) > 0 {
 			// タグが指定されている場合は、tagsに含まれるもののみを適用する
@@ -77,8 +91,24 @@ func (t *TazunaRunner) ApplyToCluster(
 				continue
 			}
 		}
-		if err := t.ApplyManifest(ctx, m, managers, testPlugins, store, gitCommit); err != nil {
-			return errors.WithStack(err)
+
+		if t.applyOpts.Sync {
+			if err := t.SyncManifest(ctx, m, managers, testPlugins, store, gitCommit, pendingSaves); err != nil {
+				return errors.WithStack(err)
+			}
+		} else {
+			if err := t.ApplyManifest(ctx, m, managers, testPlugins, store, gitCommit); err != nil {
+				return errors.WithStack(err)
+			}
+		}
+	}
+
+	// atomicモード時はここで一括保存
+	if t.applyOpts.Sync && t.applyOpts.Atomic {
+		for name, sd := range pendingSaves {
+			if err := store.Save(ctx, name, sd); err != nil {
+				return errors.Wrapf(err, "failed to save state for manifest %q", name)
+			}
 		}
 	}
 
@@ -147,8 +177,164 @@ func (t *TazunaRunner) ApplyManifest(
 	return nil
 }
 
+// SyncManifest は --sync モードでの manifest 適用処理。
+// Build() で生成したマニフェストと既存 state を比較し、差分のあるリソースのみを
+// CreateOrUpdate する。Prune が有効ならば removed リソースを Delete する。
+// テストは差分の有無に関わらず実行する (旧 state sync の挙動を維持)。
+// Atomic が有効な場合、state 保存は pendingSaves に詰めるだけにし、
+// 呼び出し元の ApplyToCluster で全 manifest 処理後にまとめて保存される。
+func (t *TazunaRunner) SyncManifest(
+	ctx context.Context,
+	m v1.Manifest,
+	managers map[string]manager.Manager,
+	testPlugins map[string]testplugin.Plugin,
+	store state.StateStore,
+	gitCommit string,
+	pendingSaves map[string]*state.StateData,
+) error {
+	// manifest名が未設定のものは state key を作れないためスキップする
+	if m.Name == "" {
+		t.logger.WarnContext(ctx, "manifest has no name, skipping state sync", slog.String("type", string(m.Type)))
+		return nil
+	}
+
+	// parallel マニフェストは Build() 未対応のためスキップする
+	if m.Type == v1.ManifestTypeParallel {
+		t.logger.WarnContext(ctx, "parallel manifest is not supported for state sync, skipping", slog.String("name", m.Name))
+		return nil
+	}
+
+	mgr, ok := managers[string(m.Type)]
+	if !ok {
+		return fmt.Errorf("manager %s not found", m.Type)
+	}
+
+	out, err := mgr.Build(ctx, t.logger, m)
+	if err != nil {
+		return errors.Wrapf(err, "failed to build manifest %q", m.Name)
+	}
+
+	defaultNs := getDefaultNamespace(m)
+	objects, err := manifest.ConvertManifestsToObjects([]byte(out), defaultNs)
+	if err != nil {
+		return errors.Wrapf(err, "failed to convert manifests to objects for %q", m.Name)
+	}
+
+	// 現在のエントリとオブジェクトのマッピングを構築
+	currentEntries := make(map[string]state.StateEntry, len(objects))
+	objectsByKey := make(map[string]client.Object, len(objects))
+	for _, obj := range objects {
+		key := state.NewStateKey(m.Name, obj)
+		uns, ok := obj.(*unstructured.Unstructured)
+		if !ok {
+			continue
+		}
+		hash, err := state.ComputeContentHash(uns)
+		if err != nil {
+			return errors.Wrapf(err, "failed to compute content hash for %s", key.String())
+		}
+		currentEntries[key.String()] = state.StateEntry{ContentHash: hash}
+		objectsByKey[key.String()] = obj
+	}
+
+	// 既存ステートを取得
+	stateData, err := store.Get(ctx, m.Name)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get state for manifest %q", m.Name)
+	}
+
+	// GenesisSecretの場合、全キーをalways-syncとして扱う
+	var alwaysSyncKeys map[string]bool
+	if m.Type == v1.ManifestTypeGenesisSecret {
+		alwaysSyncKeys = make(map[string]bool, len(currentEntries))
+		for key := range currentEntries {
+			alwaysSyncKeys[key] = true
+		}
+	}
+
+	diffEntries := state.ComputeDiff(stateData, currentEntries, alwaysSyncKeys)
+
+	if len(diffEntries) > 0 {
+		// 新しいステートデータを構築（既存エントリをコピー）
+		newEntries := make(map[string]state.StateEntry, len(stateData.Entries))
+		for k, v := range stateData.Entries {
+			newEntries[k] = v
+		}
+
+		for _, entry := range diffEntries {
+			resourceDisplay := formatDiffResourceKey(entry.Key)
+
+			switch entry.DiffType {
+			case state.DiffTypeAdded, state.DiffTypeModified, state.DiffTypeAlwaysSync:
+				obj, ok := objectsByKey[entry.Key]
+				if !ok {
+					return fmt.Errorf("object not found for key %s", entry.Key)
+				}
+				if err := resource.CreateOrUpdateForObject(ctx, t.k8sClient, obj); err != nil {
+					return errors.Wrapf(err, "failed to apply resource %s", resourceDisplay)
+				}
+				t.logger.InfoContext(ctx, "synced resource",
+					slog.String("manifest", m.Name),
+					slog.String("diff", string(entry.DiffType)),
+					slog.String("resource", resourceDisplay))
+				newEntries[entry.Key] = state.StateEntry{ContentHash: entry.NewHash}
+
+			case state.DiffTypeRemoved:
+				if t.applyOpts.Prune {
+					// StateKeyからunstructuredオブジェクトを構築して削除
+					obj, err := buildUnstructuredFromStateKey(entry.Key)
+					if err != nil {
+						return errors.Wrapf(err, "failed to build object from state key %s", entry.Key)
+					}
+					if err := resource.DeleteObject(ctx, t.k8sClient, obj); err != nil {
+						return errors.Wrapf(err, "failed to delete resource %s", resourceDisplay)
+					}
+					t.logger.InfoContext(ctx, "pruned resource",
+						slog.String("manifest", m.Name),
+						slog.String("resource", resourceDisplay))
+					delete(newEntries, entry.Key)
+				} else {
+					t.logger.WarnContext(ctx, "skipped removed resource; pass --prune to delete",
+						slog.String("manifest", m.Name),
+						slog.String("resource", resourceDisplay))
+				}
+			}
+		}
+
+		// ステートを保存（atomicモード時は後でまとめて保存）
+		newStateData := &state.StateData{
+			Metadata: state.StateMetadata{
+				LastSyncedAt:  time.Now().UTC().Format(time.RFC3339),
+				GitCommitHash: gitCommit,
+			},
+			Entries: newEntries,
+		}
+		if t.applyOpts.Atomic {
+			pendingSaves[m.Name] = newStateData
+		} else {
+			if err := store.Save(ctx, m.Name, newStateData); err != nil {
+				return errors.Wrapf(err, "failed to save state for manifest %q", m.Name)
+			}
+		}
+	}
+
+	// テストプラグインは差分の有無にかかわらず毎回実行する (旧 state sync 互換)
+	for _, tc := range m.Tests {
+		t.logger.DebugContext(ctx, "validate cluster with test plugin", slog.String("type", string(tc.Type)))
+		plug, ok := testPlugins[string(tc.Type)]
+		if !ok {
+			return fmt.Errorf("unsupported type: %s", tc.Type)
+		}
+		if err := testplugin.Start(ctx, t.logger, &tc, plug.Run); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	return nil
+}
+
 // saveManifestState は適用済みmanifestのstateをConfigMapに保存する。
-// state_sync.go の保存処理と同じロジックで currentEntries を作成し、
+// 通常 apply (--sync なし) で使われる。state_sync と同じロジックで currentEntries を作成し、
 // `state list` / `state diff` から drift を可視化できるようにする。
 func (t *TazunaRunner) saveManifestState(
 	ctx context.Context,
@@ -158,14 +344,12 @@ func (t *TazunaRunner) saveManifestState(
 	gitCommit string,
 ) error {
 	// manifest名が未設定のものはstate keyを作れないためスキップする
-	// (state_sync.go と同等の振る舞い)
 	if m.Name == "" {
 		t.logger.WarnContext(ctx, "manifest has no name, skipping state save", slog.String("type", string(m.Type)))
 		return nil
 	}
 
 	// parallel マニフェストは現状 state 対応していないためスキップする
-	// (state_sync.go と同等の振る舞い)
 	if m.Type == v1.ManifestTypeParallel {
 		t.logger.WarnContext(ctx, "parallel manifest is not supported for state save, skipping", slog.String("name", m.Name))
 		return nil
