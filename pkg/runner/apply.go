@@ -18,16 +18,48 @@ import (
 	"github.com/pepabo/tazuna/pkg/resource"
 	"github.com/pepabo/tazuna/pkg/state"
 	"github.com/pepabo/tazuna/pkg/testplugin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
+// runnerTracerName is the OpenTelemetry tracer name used by all TazunaRunner
+// top-level spans. Combined with managerTracerName ("tazuna/manager") this
+// builds a 3-level trace tree:  tazuna.* (runner) -> Kustomize/Helmfile.* etc.
+const runnerTracerName = "tazuna/runner"
+
+// recordRunnerSpanErr marks span as failed with err and records it.
+// pkg/manager 側の recordSpanError と同一処理だが、循環依存を避けるため別実装。
+func recordRunnerSpanErr(span trace.Span, err error) {
+	if err == nil {
+		return
+	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+}
+
 func (t *TazunaRunner) Apply(
 	ctx context.Context,
 	tazuna v1.Tazuna,
 	tazunaYAMLPath string,
-) error {
+) (retErr error) {
+	ctx, span := otel.Tracer(runnerTracerName).Start(ctx, "tazuna.Apply",
+		trace.WithAttributes(
+			attribute.String("tazuna.yaml.path", tazunaYAMLPath),
+			attribute.Bool("apply.sync", t.applyOpts.Sync),
+			attribute.Bool("apply.prune", t.applyOpts.Prune),
+			attribute.Bool("apply.atomic", t.applyOpts.Atomic),
+			attribute.Int("manifests.count", len(tazuna.Spec.Manifests)),
+		))
+	defer func() {
+		recordRunnerSpanErr(span, retErr)
+		span.End()
+	}()
+
 	// --prune は --sync 必須。Runner 層でもガードしておくことで、
 	// CLI 以外から呼ばれた場合 (テスト等) の安全策にする。
 	if t.applyOpts.Prune && !t.applyOpts.Sync {
@@ -63,7 +95,16 @@ func (t *TazunaRunner) Apply(
 func (t *TazunaRunner) ApplyToCluster(
 	ctx context.Context,
 	tazuna v1.Tazuna,
-) error {
+) (retErr error) {
+	ctx, span := otel.Tracer(runnerTracerName).Start(ctx, "tazuna.ApplyToCluster",
+		trace.WithAttributes(
+			attribute.Int("manifests.count", len(tazuna.Spec.Manifests)),
+		))
+	defer func() {
+		recordRunnerSpanErr(span, retErr)
+		span.End()
+	}()
+
 	// switchを書かずに処理を分けるためmapにmanagerを詰める。
 	// テストから WithManagersOverride で差し替えられた場合はそちらを優先する。
 	var managers map[string]manager.Manager

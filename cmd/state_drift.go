@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 
 	"github.com/cockroachdb/errors"
@@ -31,8 +32,16 @@ manifests are also skipped since their children are not state-tracked.
 
 Examples:
   tazuna state drift
-  tazuna state drift -f tazuna.yaml`,
+  tazuna state drift -f tazuna.yaml
+  tazuna state drift -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		_, shutdownTracer, err := cliutil.SetupTracerFromCmd(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = shutdownTracer(context.Background()) }()
+
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
@@ -55,7 +64,7 @@ Examples:
 			return err
 		}
 
-		if err := r.StateDrift(cmd.Context(), *tazuna, path, os.Stdout); err != nil {
+		if err := r.StateDrift(ctx, *tazuna, path, os.Stdout); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil

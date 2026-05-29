@@ -14,7 +14,44 @@ import (
 	"strings"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+// orasTracerName is the OpenTelemetry tracer name for the ORAS manager.
+// pkg/manager/oras は循環依存を避けるため pkg/manager と別パッケージなので、
+// ヘルパも別実装にする。span 名は親パッケージと合わせるため tazuna/manager を
+// 使う。
+const orasTracerName = "tazuna/manager"
+
+// orasManifestSpanAttrs is the ORAS variant of pkg/manager.manifestSpanAttrs.
+// ORAS マニフェスト固有の reference / digest 等は呼び出し側で追加する。
+func orasManifestSpanAttrs(m v1.Manifest) []attribute.KeyValue {
+	attrs := []attribute.KeyValue{
+		attribute.String("manifest.name", m.Name),
+		attribute.String("manifest.type", string(m.Type)),
+		attribute.String("manifest.path", m.Path),
+	}
+	if m.ORAS != nil {
+		attrs = append(attrs,
+			attribute.String("oras.reference", m.ORAS.Reference),
+			attribute.String("oras.delegate", string(m.ORAS.Delegate.Type)),
+		)
+	}
+	return attrs
+}
+
+// orasRecordSpanError は err != nil なら span に error を記録する。
+// pkg/manager.recordSpanError と同一処理だが、循環依存を避けるため別実装。
+func orasRecordSpanError(span trace.Span, err error) {
+	if err == nil {
+		return
+	}
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
+}
 
 // DelegateManager は ORAS が委譲する先のサブマネージャが満たすべき interface。
 // pkg/manager.Manager と同一シグネチャのため、commit 6 で *manager.Helmfile /
@@ -54,7 +91,14 @@ func NewWithOptions(puller Puller, helmfile, kustomize DelegateManager, opts Pul
 }
 
 // Apply は artifact を pull し、委譲先 manager の Apply を呼びます。
-func (o *ORAS) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (o *ORAS) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(orasTracerName).Start(ctx, "ORAS.Apply",
+		trace.WithAttributes(orasManifestSpanAttrs(m)...))
+	defer func() {
+		orasRecordSpanError(span, retErr)
+		span.End()
+	}()
+
 	delegate, delegated, err := o.prepareDelegate(ctx, logger, m)
 	if err != nil {
 		return err
@@ -63,7 +107,14 @@ func (o *ORAS) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) er
 }
 
 // Destroy は artifact を pull し、委譲先 manager の Destroy を呼びます。
-func (o *ORAS) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (o *ORAS) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+	ctx, span := otel.Tracer(orasTracerName).Start(ctx, "ORAS.Destroy",
+		trace.WithAttributes(orasManifestSpanAttrs(m)...))
+	defer func() {
+		orasRecordSpanError(span, retErr)
+		span.End()
+	}()
+
 	delegate, delegated, err := o.prepareDelegate(ctx, logger, m)
 	if err != nil {
 		return err
@@ -72,7 +123,14 @@ func (o *ORAS) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) 
 }
 
 // Build は artifact を pull し、委譲先 manager の Build を呼びます。
-func (o *ORAS) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (string, error) {
+func (o *ORAS) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (result string, retErr error) {
+	ctx, span := otel.Tracer(orasTracerName).Start(ctx, "ORAS.Build",
+		trace.WithAttributes(orasManifestSpanAttrs(m)...))
+	defer func() {
+		orasRecordSpanError(span, retErr)
+		span.End()
+	}()
+
 	delegate, delegated, err := o.prepareDelegate(ctx, logger, m)
 	if err != nil {
 		return "", err

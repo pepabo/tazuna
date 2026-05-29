@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"path/filepath"
 
 	"github.com/cockroachdb/errors"
@@ -42,8 +43,16 @@ Examples:
   tazuna apply -f tazuna.yaml --log-level debug
   tazuna apply -f tazuna.yaml --sync
   tazuna apply -f tazuna.yaml --sync --prune
-  tazuna apply -f tazuna.yaml --sync --atomic`,
+  tazuna apply -f tazuna.yaml --sync --atomic
+  tazuna apply -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		_, shutdownTracer, err := cliutil.SetupTracerFromCmd(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = shutdownTracer(context.Background()) }()
+
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
@@ -118,7 +127,7 @@ Examples:
 			}
 		}
 
-		if err := r.Apply(cmd.Context(), *tazuna, path); err != nil {
+		if err := r.Apply(ctx, *tazuna, path); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil

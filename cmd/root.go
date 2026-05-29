@@ -43,4 +43,9 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringP("file-path", "f", "tazuna.yaml", "Path to tazuna.yaml")
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "log level(debug/info/warn/error)")
+	// OpenTelemetry tracing は短命 CLI 向けに opt-in 設計。
+	// --otlp-endpoint が空文字 (default) のときは no-op tracer を使うため外部依存ゼロ。
+	// 例: --otlp-endpoint=localhost:4317 で OTLP/gRPC collector に出力する。
+	rootCmd.PersistentFlags().String("otlp-endpoint", "", "OTLP/gRPC endpoint to send traces to (e.g. localhost:4317). Empty disables tracing.")
+	rootCmd.PersistentFlags().Bool("otlp-insecure", true, "Use plaintext gRPC for the OTLP exporter (no TLS)")
 }

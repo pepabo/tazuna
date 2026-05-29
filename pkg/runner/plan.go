@@ -13,6 +13,9 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/manager"
 	"github.com/pepabo/tazuna/pkg/manifest"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utildiff "k8s.io/apimachinery/pkg/util/diff"
@@ -53,7 +56,17 @@ func (t *TazunaRunner) Plan(
 	tazuna v1.Tazuna,
 	tazunaYAMLPath string,
 	w io.Writer,
-) error {
+) (retErr error) {
+	ctx, span := otel.Tracer(runnerTracerName).Start(ctx, "tazuna.Plan",
+		trace.WithAttributes(
+			attribute.String("tazuna.yaml.path", tazunaYAMLPath),
+			attribute.Int("manifests.count", len(tazuna.Spec.Manifests)),
+		))
+	defer func() {
+		recordRunnerSpanErr(span, retErr)
+		span.End()
+	}()
+
 	if err := t.expandIncludes(ctx, &tazuna, tazunaYAMLPath); err != nil {
 		return errors.WithStack(err)
 	}

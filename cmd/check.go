@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,8 +30,16 @@ tazuna.yaml is written back.
 
 Examples:
   tazuna check -f tazuna.yaml
-  tazuna check -f tazuna.yaml --fix`,
+  tazuna check -f tazuna.yaml --fix
+  tazuna check -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		_, shutdownTracer, err := cliutil.SetupTracerFromCmd(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = shutdownTracer(context.Background()) }()
+
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
 			return errors.WithStack(err)
@@ -61,7 +70,7 @@ Examples:
 		r := runner.NewTazunaRunner(logger, nil, nil)
 
 		if fix {
-			if err := r.CheckAndFix(cmd.Context(), tazuna, absPath); err != nil {
+			if err := r.CheckAndFix(ctx, tazuna, absPath); err != nil {
 				return errors.Wrapf(err, "check --fix failed for tazuna.yaml at %s", path)
 			}
 
@@ -77,7 +86,7 @@ Examples:
 			return nil
 		}
 
-		if err := r.Check(cmd.Context(), tazuna, absPath); err != nil {
+		if err := r.Check(ctx, tazuna, absPath); err != nil {
 			return errors.Wrapf(err, "check failed for tazuna.yaml at %s", path)
 		}
 
