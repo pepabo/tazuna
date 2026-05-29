@@ -139,6 +139,7 @@ func TestSubcommandsAreRegisteredOnRoot(t *testing.T) {
 		"build":                   true,
 		"check":                   true,
 		"plan":                    true,
+		"status":                  true,
 		"tags":                    true,
 		"state":                   true,
 		"secret-to-genesissecret": true,
