@@ -80,6 +80,12 @@ func TestSubcommandFlags(t *testing.T) {
 			},
 		},
 		{
+			cmd: planCmd,
+			flags: []flagSpec{
+				{name: "tags", defaultVal: "[]"},
+			},
+		},
+		{
 			cmd: checkCmd,
 			flags: []flagSpec{
 				{name: "fix", defaultVal: "false"},
@@ -132,6 +138,7 @@ func TestSubcommandsAreRegisteredOnRoot(t *testing.T) {
 		"destroy":                 true,
 		"build":                   true,
 		"check":                   true,
+		"plan":                    true,
 		"tags":                    true,
 		"state":                   true,
 		"secret-to-genesissecret": true,
