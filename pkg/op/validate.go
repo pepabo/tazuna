@@ -9,7 +9,7 @@ import (
 // identifierPattern restricts vault / item identifiers to characters that the
 // 1Password CLI handles unambiguously. Values outside this set tend to produce
 // opaque `op` errors, so we reject them at the call site instead.
-var identifierPattern = regexp.MustCompile(`^[A-Za-z0-9_.\- ]+$`)
+var identifierPattern = regexp.MustCompile(`^[\p{L}\p{N}_.\- ]+$`)
 
 // ValidateIdentifier checks that name is a non-empty identifier that matches
 // the allowlist. kind is included in the error so callers can tell which
