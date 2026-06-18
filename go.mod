@@ -35,7 +35,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cockroachdb/errors v1.13.0
 	github.com/google/cel-go v0.28.1
-	github.com/helmfile/helmfile v1.5.1
+	github.com/helmfile/helmfile v1.5.2
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/opencontainers/go-digest v1.0.0
@@ -52,7 +52,7 @@ require (
 	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v0.36.0
 	oras.land/oras-go/v2 v2.6.0
-	sigs.k8s.io/controller-runtime v0.23.3
+	sigs.k8s.io/controller-runtime v0.24.0
 	sigs.k8s.io/kustomize/api v0.21.1
 	sigs.k8s.io/kustomize/kyaml v0.21.1
 	sigs.k8s.io/yaml v1.6.0
@@ -171,7 +171,7 @@ require (
 	github.com/extism/go-sdk v1.7.1 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fluxcd/cli-utils v1.1.0 // indirect
+	github.com/fluxcd/cli-utils v1.2.0 // indirect
 	github.com/fluxcd/flagger v1.43.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fujiwara/tfstate-lookup v1.11.0 // indirect
@@ -257,7 +257,7 @@ require (
 	github.com/hashicorp/hcp-sdk-go v0.172.0 // indirect
 	github.com/hashicorp/jsonapi v1.5.0 // indirect
 	github.com/hashicorp/vault/api v1.23.0 // indirect
-	github.com/helmfile/chartify v0.26.3 // indirect
+	github.com/helmfile/chartify v0.26.4 // indirect
 	github.com/helmfile/vals v0.44.0 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.195 // indirect
@@ -385,7 +385,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	helm.sh/helm/v3 v3.21.0 // indirect
-	helm.sh/helm/v4 v4.1.4 // indirect
+	helm.sh/helm/v4 v4.2.0 // indirect
 	k8s.io/apiextensions-apiserver v0.36.0 // indirect
 	k8s.io/apiserver v0.36.0 // indirect
 	k8s.io/cli-runtime v0.36.0 // indirect
