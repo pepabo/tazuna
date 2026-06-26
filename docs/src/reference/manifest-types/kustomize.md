@@ -23,7 +23,7 @@ Tazuna は内部で kustomize (`sigs.k8s.io/kustomize`) を呼び、`kustomize b
 | 操作      | 内部処理 |
 |-----------|----------|
 | `Build`   | `kustomize build <path>` 相当のレンダリングを行い、結果 YAML を標準出力に書く。 |
-| `Apply`   | レンダリング結果を unstructured オブジェクト群に変換し、`defaultNamespace` を補完したうえで 1 つずつ `CreateOrUpdate` する。 |
+| `Apply`   | レンダリング結果を unstructured オブジェクト群に変換し、`defaultNamespace` を補完したうえで 1 つずつ Server-Side Apply (FieldOwner=`tazuna`) する。 |
 | `Destroy` | レンダリング結果を unstructured オブジェクト群に変換し、`defaultNamespace` を補完したうえで 1 つずつ削除する。 |
 
 `kustomize build` 自体はクラスタへの接続を必要としません。

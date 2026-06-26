@@ -237,7 +237,10 @@ func (t *TazunaRunner) ApplyManifest(
 		startMsg += " - " + m.Description
 	}
 	t.logger.InfoContext(ctx, startMsg)
-	if err := mgr.Apply(ctx, t.logger, m); err != nil {
+	// Apply は適用対象となった render 済みオブジェクトを返す。これを state hash 計算に
+	// 再利用することで、saveManifestState 内で Build() を再度呼ぶ二重 render を避ける。
+	objects, err := mgr.Apply(ctx, t.logger, m)
+	if err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -254,8 +257,8 @@ func (t *TazunaRunner) ApplyManifest(
 	}
 
 	// マニフェストの適用とテスト実行が成功した後にstateを保存する。
-	// state_sync.go と同等の構造でmanifest単位のContent Hashを記録する。
-	if err := t.saveManifestState(ctx, m, mgr, store, gitCommit); err != nil {
+	// Apply が返した render 済みオブジェクトをそのまま使い、manifest単位のContent Hashを記録する。
+	if err := t.saveManifestState(ctx, m, objects, store, gitCommit); err != nil {
 		return errors.WithStack(err)
 	}
 
@@ -422,12 +425,13 @@ func (t *TazunaRunner) SyncManifest(
 }
 
 // saveManifestState は適用済みmanifestのstateをConfigMapに保存する。
-// 通常 apply (--sync なし) で使われる。state_sync と同じロジックで currentEntries を作成し、
-// `state list` / `state diff` から drift を可視化できるようにする。
+// 通常 apply (--sync なし) で使われる。Apply() が返した render 済みオブジェクトを
+// そのまま受け取り (再 Build による二重 render を回避)、manifest単位の Content Hash を
+// 記録して `state list` / `state diff` から drift を可視化できるようにする。
 func (t *TazunaRunner) saveManifestState(
 	ctx context.Context,
 	m v1.Manifest,
-	mgr manager.Manager,
+	objects []client.Object,
 	store state.StateStore,
 	gitCommit string,
 ) error {
@@ -435,19 +439,6 @@ func (t *TazunaRunner) saveManifestState(
 	if m.Name == "" {
 		t.logger.WarnContext(ctx, "manifest has no name, skipping state save", slog.String("type", string(m.Type)))
 		return nil
-	}
-
-	out, err := mgr.Build(ctx, t.logger, m)
-	if err != nil {
-		t.logger.WarnContext(ctx, "failed to build manifest for state save", slog.String("name", m.Name), slog.String("error", err.Error()))
-		return errors.Wrapf(err, "failed to build manifest %q for state save", m.Name)
-	}
-
-	defaultNs := getDefaultNamespace(m)
-	objects, err := manifest.ConvertManifestsToObjects([]byte(out), defaultNs)
-	if err != nil {
-		t.logger.WarnContext(ctx, "failed to convert manifests to objects for state save", slog.String("name", m.Name), slog.String("error", err.Error()))
-		return errors.Wrapf(err, "failed to convert manifests to objects for %q", m.Name)
 	}
 
 	currentEntries := make(map[string]state.StateEntry, len(objects))

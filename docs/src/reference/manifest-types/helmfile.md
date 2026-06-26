@@ -1,18 +1,59 @@
 # `type: helmfile`
 
-`helmfile` Manifest は、helmfile で記述された複数の Helm release を、
-**`helmfile template` 相当でレンダリングしてからクラスタへ反映** する Manifest type です。
+`helmfile` Manifest は、[helmfile](https://github.com/helmfile/helmfile) 形式 (のサブセット)
+で記述された複数の Helm release を、**`helmfile template` 相当でレンダリングしてから
+クラスタへ反映** する Manifest type です。
 
-Tazuna は内部で `helmfile/helmfile` パッケージの `app.Template` を呼び、その出力 YAML を
-unstructured オブジェクトに変換して `CreateOrUpdate` します。helm の release 履歴は
-クラスタ側に保存しません（helm rollback は使えなくなります）。
-ブートストラップにおいては rollback よりも宣言的な再生成を優先する、というスタンスです。
+> **互換性について**
+> Tazuna は helmfile 本体には依存しません。`helmfile.yaml` の **サブセット** を独自に解釈し、
+> 内部的に Helm パッケージ (`helm.sh/helm/v3`) の **in-memory render**
+> (`action.Install{ClientOnly, DryRun}`) でマニフェストを生成します。形式・着想は helmfile
+> から得ていますが、helmfile そのものではありません。サポートするフィールドは
+> [対応する helmfile サブセット](#対応する-helmfile-サブセット) を参照してください。
+
+レンダリング結果の YAML は unstructured オブジェクトに変換し、Server-Side Apply
+(FieldOwner=`tazuna`) でクラスタへ適用します。helm の release 履歴はクラスタ側に
+保存しません（helm rollback は使えません）。ブートストラップにおいては rollback よりも
+宣言的な再生成を優先する、というスタンスです。
+
+> 以前の実装は helmfile 本体の `app.Template` を呼び、その標準出力をグローバルに
+> `os.Stdout` を差し替えてキャプチャしていました。これは並列 apply 時にレンダリング結果が
+> 混線し得るバグの温床でしたが、in-memory render への移行により根治しています。
 
 ## `path`
 
-`helmfile.yaml`（または `helmfile.yaml.gotmpl` などの helmfile が認識するファイル）が
-置かれているディレクトリを指します。
+`helmfile.yaml`（または `helmfile.yaml.gotmpl`）ファイル、もしくはそれらが置かれている
+**ディレクトリ** を指します。ディレクトリを指定した場合は
+`helmfile.yaml.gotmpl` → `helmfile.yaml` → `helmfile.yml.gotmpl` → `helmfile.yml`
+の順で探索します。
 **`tazuna.yaml` 自身のディレクトリ起点** の相対パスで書きます。
+
+## 対応する helmfile サブセット
+
+以下の `helmfile.yaml` の構造を解釈します。
+
+```yaml
+releases:
+  - name: <release 名>
+    namespace: <namespace>      # 省略時は defaultNamespace で補完
+    chart: <ローカルチャートへの相対パス>
+    version: <バージョン>        # ローカルチャートでは情報用
+    values:
+      - <value ファイルへの相対パス>
+      - <インラインの値 (map)>
+```
+
+- `helmfile.yaml` 自体を Go テンプレートとして評価します。`.StateValues.<name>` /
+  `.Values.<name>` で [`vars`](#vars) を参照でき、`default` などの
+  [sprig](https://masterminds.github.io/sprig/) 関数が使えます。
+- `chart` は **ローカルチャートへの相対パス** のみ対応します
+  (リモートリポジトリの chart はサポートしません)。
+- `values` は value ファイルのパスとインライン map を順にマージし、最後に
+  [`extraValueFiles`](#固有フィールド) を上書きとしてマージします。
+
+helmfile 本体の以下の機能は **未対応** です: environments / リモート chart /
+`bases` / release 間の `needs` / `hooks` / `--selector` 等。これらが必要な場合は
+helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md) などで取り込んでください。
 
 ## 固有フィールド
 
@@ -86,11 +127,11 @@ unstructured オブジェクトに変換して `CreateOrUpdate` します。helm
 
 | 操作      | 内部処理 |
 |-----------|----------|
-| `Build`   | helmfile template の出力 YAML を標準出力に書く。 |
-| `Apply`   | helmfile template の結果を unstructured 化し、`defaultNamespace` を補完して順に `CreateOrUpdate`。`wait` が `true` なら Ready 待ち。 |
-| `Destroy` | helmfile template の結果を unstructured 化し、`defaultNamespace` を補完して順に削除。`wait` は適用されません。 |
+| `Build`   | helm の in-memory render の結果 YAML を返す。 |
+| `Apply`   | render 結果を unstructured 化し、`defaultNamespace` を補完して順に Server-Side Apply。`wait` が `true` なら Ready 待ち。 |
+| `Destroy` | render 結果を unstructured 化し、`defaultNamespace` を補完して順に削除。`wait` は適用されません。 |
 
-`Apply` / `Destroy` / `Build` のいずれも helmfile template の段階で `vars` を解決します。
+`Apply` / `Destroy` / `Build` のいずれも render の段階で `vars` を解決します。
 解決に失敗した場合（環境変数未設定、1Password の Item にフィールドが無い等）はクラスタには触れずに失敗します。
 
 ## 例
