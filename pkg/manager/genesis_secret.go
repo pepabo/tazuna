@@ -11,6 +11,7 @@ import (
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/genesissecret"
+	"github.com/pepabo/tazuna/pkg/manifest"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -106,7 +107,12 @@ func (g *GenesisSecret) resolveProvider(name string) (genesissecret.SecretProvid
 }
 
 // Apply implements Manager.
-func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+//
+// 戻り値の objects は state hash 計算用に Build() と同一の経路 (outputs[0] の Secret を
+// yaml.Marshal -> ConvertManifestsToObjects) で生成したものを返します。これにより
+// apply 後に Build() を再度呼んで render し直す二重 render を回避しつつ、state diff/sync
+// 側 (Build 経由) とのハッシュ整合性を保ちます。
+func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (objects []client.Object, retErr error) {
 	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "GenesisSecret.Apply",
 		trace.WithAttributes(manifestSpanAttrs(m)...))
 	defer func() {
@@ -116,25 +122,27 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 
 	data, err := os.ReadFile(m.Path)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	genesisSecret := v1.GenesisSecret{}
 	if err := yaml.Unmarshal(data, &genesisSecret); err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	provider, err := g.resolveProvider(genesisSecret.Spec.Provider)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	span.SetAttributes(attribute.String("genesissecret.provider", genesisSecret.Spec.Provider))
 
+	// provider からの fetch は 1 度だけ行い、side-effect と state object 生成の双方で
+	// 同じ items を使う。
 	items := map[string]string{}
 	for _, s := range genesisSecret.Spec.Secrets {
 		i, err := provider.Fetch(ctx, s)
 		if err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 		items = merge(items, i)
 	}
@@ -142,13 +150,13 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 	for _, o := range genesisSecret.Spec.Outputs {
 		kind, err := classifyOutput(o)
 		if err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 
 		switch kind {
 		case "stdout":
 			if err := g.writeItemsToStdout(items); err != nil {
-				return errors.WithStack(err)
+				return nil, errors.WithStack(err)
 			}
 		case "kubernetesSecret":
 			secret := corev1.Secret{
@@ -163,23 +171,76 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 			}
 
 			_, err := controllerutil.CreateOrUpdate(ctx, g.client, &secret, func() error {
-				secret.SetLabels(o.KubernetesSecret.Labels)
-				secret.SetAnnotations(o.KubernetesSecret.Annotations)
-				secret.StringData = items
-				if o.KubernetesSecret.Type == "" {
-					secret.Type = corev1.SecretTypeOpaque
-				} else {
-					secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
-				}
+				applySecretFields(&secret, o, items)
 				return nil
 			})
 			if err != nil {
-				return errors.WithStack(err)
+				return nil, errors.WithStack(err)
 			}
 		}
 	}
 
-	return nil
+	// state hash 用のオブジェクトを Build() と同一経路で生成して返す。
+	objects, err = g.stateObjects(items, genesisSecret)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return objects, nil
+}
+
+// applySecretFields は KubernetesSecret 出力の設定値を corev1.Secret に反映します。
+// Apply (controllerutil 経由) と Build/stateObjects (Secret 構築) で共通利用し、
+// 生成される Secret が一致することを保証します。
+func applySecretFields(secret *corev1.Secret, o v1.GenesisSecretOutput, items map[string]string) {
+	secret.SetLabels(o.KubernetesSecret.Labels)
+	secret.SetAnnotations(o.KubernetesSecret.Annotations)
+	secret.StringData = items
+	if o.KubernetesSecret.Type == "" {
+		secret.Type = corev1.SecretTypeOpaque
+	} else {
+		secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
+	}
+}
+
+// stateObjects は Build() と完全に同一の経路で state hash 用の client.Object 群を返します。
+// Build() が outputs[0] のみを対象とし、stdout 出力では空を返すのと挙動を揃えます。
+func (g *GenesisSecret) stateObjects(items map[string]string, genesisSecret v1.GenesisSecret) ([]client.Object, error) {
+	if len(genesisSecret.Spec.Outputs) == 0 {
+		return nil, nil
+	}
+	o := genesisSecret.Spec.Outputs[0]
+	kind, err := classifyOutput(o)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if kind != "kubernetesSecret" {
+		// stdout 出力にはクラスタリソースが対応しないため state object も無し。
+		return nil, nil
+	}
+
+	secret := newSecretForOutput(o, items)
+	out, err := yaml.Marshal(secret)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	// getDefaultNamespace(genesissecret) は "" を返すため、namespace は補完しない。
+	return manifest.ConvertManifestsToObjects(out, "")
+}
+
+// newSecretForOutput は KubernetesSecret 出力から corev1.Secret を構築します。
+func newSecretForOutput(o v1.GenesisSecretOutput, items map[string]string) corev1.Secret {
+	secret := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: o.KubernetesSecret.Namespace,
+			Name:      o.KubernetesSecret.Name,
+		},
+	}
+	applySecretFields(&secret, o, items)
+	return secret
 }
 
 // Destroy implements Manager.
@@ -298,24 +359,7 @@ func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Man
 		// これにより state save 経路でも 0 entries となり state が書き込まれない。
 		return "", nil
 	case "kubernetesSecret":
-		secret := corev1.Secret{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "Secret",
-				APIVersion: "v1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: o.KubernetesSecret.Namespace,
-				Name:      o.KubernetesSecret.Name,
-			},
-		}
-		secret.SetLabels(o.KubernetesSecret.Labels)
-		secret.SetAnnotations(o.KubernetesSecret.Annotations)
-		secret.StringData = items
-		if o.KubernetesSecret.Type == "" {
-			secret.Type = corev1.SecretTypeOpaque
-		} else {
-			secret.Type = corev1.SecretType(o.KubernetesSecret.Type)
-		}
+		secret := newSecretForOutput(o, items)
 
 		out, err := yaml.Marshal(secret)
 		if err != nil {

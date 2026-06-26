@@ -16,6 +16,7 @@ import (
 	"github.com/pepabo/tazuna/pkg/manager"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -30,14 +31,14 @@ type fakeDAGManager struct {
 	sleep time.Duration
 }
 
-func (f *fakeDAGManager) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error {
+func (f *fakeDAGManager) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) ([]client.Object, error) {
 	if f.sleep > 0 {
 		time.Sleep(f.sleep)
 	}
 	if f.onApply != nil {
-		return f.onApply(m.Name)
+		return nil, f.onApply(m.Name)
 	}
-	return nil
+	return nil, nil
 }
 
 func (f *fakeDAGManager) Destroy(_ context.Context, _ *slog.Logger, _ v1.Manifest) error {
@@ -162,16 +163,16 @@ type fakeDAGManagerStartObs struct {
 	onStart func(name string) error
 }
 
-func (f *fakeDAGManagerStartObs) Apply(_ context.Context, _ *slog.Logger, m v1.Manifest) error {
+func (f *fakeDAGManagerStartObs) Apply(_ context.Context, _ *slog.Logger, m v1.Manifest) ([]client.Object, error) {
 	if f.onStart != nil {
 		if err := f.onStart(m.Name); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if f.sleep > 0 {
 		time.Sleep(f.sleep)
 	}
-	return nil
+	return nil, nil
 }
 
 func (f *fakeDAGManagerStartObs) Destroy(_ context.Context, _ *slog.Logger, _ v1.Manifest) error {
