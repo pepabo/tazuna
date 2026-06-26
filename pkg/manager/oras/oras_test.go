@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // mockPuller は Puller interface のモック実装。
@@ -46,10 +47,10 @@ type mockDelegate struct {
 	lastManifest v1.Manifest
 }
 
-func (m *mockDelegate) Apply(_ context.Context, _ *slog.Logger, mf v1.Manifest) error {
+func (m *mockDelegate) Apply(_ context.Context, _ *slog.Logger, mf v1.Manifest) ([]client.Object, error) {
 	m.applyCalls++
 	m.lastManifest = mf
-	return m.applyErr
+	return nil, m.applyErr
 }
 
 func (m *mockDelegate) Destroy(_ context.Context, _ *slog.Logger, mf v1.Manifest) error {
@@ -89,7 +90,7 @@ func TestORAS_Apply_DelegatesToHelmfile(t *testing.T) {
 		},
 	}
 
-	if err := o.Apply(context.Background(), slog.Default(), m); err != nil {
+	if _, err := o.Apply(context.Background(), slog.Default(), m); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if puller.calls != 1 {
@@ -133,7 +134,7 @@ func TestORAS_Apply_DelegatesToKustomizeWithTargetSubpath(t *testing.T) {
 		},
 	}
 
-	if err := o.Apply(context.Background(), nil, m); err != nil {
+	if _, err := o.Apply(context.Background(), nil, m); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if km.applyCalls != 1 {
@@ -166,7 +167,7 @@ func TestORAS_Apply_TargetEscapeRejected(t *testing.T) {
 			},
 		},
 	}
-	err := o.Apply(context.Background(), nil, m)
+	_, err := o.Apply(context.Background(), nil, m)
 	if err == nil || !strings.Contains(err.Error(), "invalid target path") {
 		t.Fatalf("Apply error = %v, want invalid target path", err)
 	}
@@ -185,7 +186,7 @@ func TestORAS_Apply_UnsupportedDelegateType(t *testing.T) {
 				Delegate:  v1.ORASDelegate{Type: dt},
 			},
 		}
-		err := o.Apply(context.Background(), nil, m)
+		_, err := o.Apply(context.Background(), nil, m)
 		if err == nil || !strings.Contains(err.Error(), "unsupported delegate type") {
 			t.Errorf("delegate %q: error = %v, want unsupported delegate type", dt, err)
 		}
@@ -194,7 +195,7 @@ func TestORAS_Apply_UnsupportedDelegateType(t *testing.T) {
 
 func TestORAS_Apply_NilORASSpec(t *testing.T) {
 	o, _, _, _ := newTestORAS(t, t.TempDir())
-	err := o.Apply(context.Background(), nil, v1.Manifest{Name: "x", Type: v1.ManifestTypeORAS})
+	_, err := o.Apply(context.Background(), nil, v1.Manifest{Name: "x", Type: v1.ManifestTypeORAS})
 	if err == nil || !strings.Contains(err.Error(), "no oras spec") {
 		t.Fatalf("error = %v, want no oras spec", err)
 	}
@@ -212,7 +213,7 @@ func TestORAS_Apply_PullerErrorPropagates(t *testing.T) {
 			Delegate:  v1.ORASDelegate{Type: v1.ORASDelegateTypeHelmfile, Helmfile: &v1.ManifestHelmfile{}},
 		},
 	}
-	err := o.Apply(context.Background(), nil, m)
+	_, err := o.Apply(context.Background(), nil, m)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -234,7 +235,7 @@ func TestORAS_Apply_DelegateErrorPropagates(t *testing.T) {
 			Delegate:  v1.ORASDelegate{Type: v1.ORASDelegateTypeHelmfile, Helmfile: &v1.ManifestHelmfile{}},
 		},
 	}
-	err := o.Apply(context.Background(), nil, m)
+	_, err := o.Apply(context.Background(), nil, m)
 	if err == nil || !strings.Contains(err.Error(), "apply failed") {
 		t.Fatalf("error = %v, want apply failed", err)
 	}
@@ -300,7 +301,7 @@ func TestORAS_NewWithOptions_PassesPullOptions(t *testing.T) {
 			Delegate:  v1.ORASDelegate{Type: v1.ORASDelegateTypeHelmfile, Helmfile: &v1.ManifestHelmfile{}},
 		},
 	}
-	if err := o.Apply(context.Background(), nil, m); err != nil {
+	if _, err := o.Apply(context.Background(), nil, m); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if puller.lastOpts != opts {
@@ -320,7 +321,7 @@ func TestORAS_NilDelegateConfigured(t *testing.T) {
 			Delegate:  v1.ORASDelegate{Type: v1.ORASDelegateTypeHelmfile, Helmfile: &v1.ManifestHelmfile{}},
 		},
 	}
-	err := o.Apply(context.Background(), nil, m)
+	_, err := o.Apply(context.Background(), nil, m)
 	if err == nil || !strings.Contains(err.Error(), "helmfile delegate is not configured") {
 		t.Fatalf("error = %v, want helmfile delegate not configured", err)
 	}
@@ -339,7 +340,7 @@ func TestORAS_TargetWithLeadingSlashStripped(t *testing.T) {
 			Delegate:  v1.ORASDelegate{Type: v1.ORASDelegateTypeKustomize, Kustomize: &v1.ManifestKustomize{}},
 		},
 	}
-	if err := o.Apply(context.Background(), nil, m); err != nil {
+	if _, err := o.Apply(context.Background(), nil, m); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	want := filepath.Join(tmp, "charts/app")

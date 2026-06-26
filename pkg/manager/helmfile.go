@@ -3,11 +3,11 @@ package manager
 import (
 	"bytes"
 	"context"
-	"io"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
-	"sync"
+	"text/template"
 	"time"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -18,15 +18,34 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/Masterminds/sprig/v3"
 	"github.com/cockroachdb/errors"
-	"github.com/helmfile/helmfile/pkg/app"
-	"github.com/helmfile/helmfile/pkg/config"
+	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"sigs.k8s.io/yaml"
 )
 
+// Helmfile は helmfile (https://github.com/helmfile/helmfile) 形式の "サブセット" 互換
+// レンダラです。helmfile 本体には依存せず、内部的に helm パッケージ
+// (helm.sh/helm/v3) の in-memory render を用いて manifest を生成します。
+//
+// 設計上の意図 (TASKLIST 参照):
+//   - helmfile.app.Template は結果を os.Stdout に書き出すため、従来は os.Stdout を
+//     グローバルに差し替えてキャプチャしていた。これは並列 apply 時にレンダリング結果が
+//     混線するバグの温床だった。helm の action.Install{ClientOnly,DryRun} は結果を
+//     Go の値 (release.Manifest) として返すため、os.Stdout 差し替えが一切不要になる。
+//   - helmfile.app は logger 未設定で segv するハックが必要だったが、helm では不要。
+//
+// インスピレーション元として helmfile をクレジットします。本実装が解釈する helmfile.yaml
+// は以下のサブセットです (差分は docs/src/reference/manifest-types/helmfile.md を参照):
+//   - releases[].{name,namespace,chart,version,values}
+//   - chart はローカルチャートへの相対パス (リポジトリ chart は未サポート)
+//   - values[] はファイルパス文字列、またはインライン map
+//   - helmfile.yaml 自体の Go テンプレート (.StateValues / .Values) と sprig 関数
 type Helmfile struct {
 	client   client.Client
 	opClient op.Client
@@ -41,38 +60,7 @@ func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manife
 		span.End()
 	}()
 
-	if m.Helmfile == nil {
-		m.Helmfile = v1.DefaultHelmfile()
-	}
-
-	globalImpl, err := h.setupGlobalImpl(ctx, &m)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	templateImpl, err := h.setupTemplateImpl(ctx, &m, globalImpl)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	a := app.New(templateImpl)
-
-	// Loggerを入れないとsegvで落ちるのでzap loggerを初期化する
-	a.Logger = zap.NewNop().Sugar()
-
-	// helmfileパッケージではtemplateの書き出しを設定することはできず、
-	// https://github.com/helmfile/helmfile/blob/b5eb879357d0eae3ad914a38f7221bed94573cb6/pkg/testutil/testutil.go という関数を用いて標準出力をキャプチャしています。
-	// 提供されるCaptureOutputではクロージャがerrorを返すことができないため、forkした関数を作ります。
-	out, err := captureStdout(func() error {
-		if err := a.Template(templateImpl); err != nil {
-			return errors.WithStack(err)
-		}
-		return nil
-	})
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	objects, err := manifest.ConvertManifestsToObjects([]byte(out), m.Helmfile.DefaultNamespace)
+	objects, err := h.renderObjects(ctx, &m)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -88,7 +76,7 @@ func (h *Helmfile) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manife
 }
 
 // Apply implements Manager.
-func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (objects []client.Object, retErr error) {
 	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Apply",
 		trace.WithAttributes(manifestSpanAttrs(m)...))
 	defer func() {
@@ -96,61 +84,35 @@ func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest
 		span.End()
 	}()
 
-	// NOTE: helmfileのapp.Sync() でcontroller-runtimeのfake clientを差し込むことはできないかつ、
-	//       対象のクラスタにhelmの管理情報を保存しないtまえ、
-	//       helmfile templateで生成したKubernetesマニフェスト群をclientでapplyする方針を利用します。
-	//       これによりhelmのrollbackを利用できなくなりますが、クラスタのbootstrapという観点ではrollbackの機能はいらないものとします。
-	if m.Helmfile == nil {
-		m.Helmfile = v1.DefaultHelmfile()
-	}
-
-	globalImpl, err := h.setupGlobalImpl(ctx, &m)
+	// NOTE: helm の release は当てず、render した manifest を controller-runtime の
+	//       client で apply する方針を維持する。これにより fake client を注入した
+	//       ユニットテストが可能になり、また state 管理 (pkg/state) と組み合わせて
+	//       kustomize / genesissecret と横断的に差分管理できる。helm rollback は
+	//       利用できないが、クラスタ bootstrap という用途では不要とする。
+	//
+	// m.Helmfile の nil デフォルト補完は renderObjects -> render に集約しているため
+	// ここでは行わない。renderObjects 呼び出し後は m.Helmfile が非 nil になる。
+	objects, err := h.renderObjects(ctx, &m)
 	if err != nil {
-		return errors.WithStack(err)
-	}
-	templateImpl, err := h.setupTemplateImpl(ctx, &m, globalImpl)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	a := app.New(templateImpl)
-
-	// Loggerを入れないとsegvで落ちるのでzap loggerを初期化する
-	a.Logger = zap.NewNop().Sugar()
-
-	// helmfileパッケージではtemplateの書き出しを設定することはできず、
-	// https://github.com/helmfile/helmfile/blob/b5eb879357d0eae3ad914a38f7221bed94573cb6/pkg/testutil/testutil.go という関数を用いて標準出力をキャプチャしています。
-	// 提供されるCaptureOutputではクロージャがerrorを返すことができないため、forkした関数を作ります。
-	out, err := captureStdout(func() error {
-		if err := a.Template(templateImpl); err != nil {
-			return errors.WithStack(err)
-		}
-		return nil
-	})
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	objects, err := manifest.ConvertManifestsToObjects([]byte(out), m.Helmfile.DefaultNamespace)
-	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	span.SetAttributes(attribute.Int("manifest.objects", len(objects)))
 
 	for _, obj := range objects {
 		logger.DebugContext(ctx, "trying to create or update an object", slog.String("namespace", obj.GetNamespace()), slog.String("name", obj.GetName()), slog.String("kind", obj.GetObjectKind().GroupVersionKind().Kind))
 		if err := resource.CreateOrUpdateForObject(ctx, h.client, obj); err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 	}
 
 	// Wait が設定されている場合は、リソースが Ready になるまで待つ
 	if m.Helmfile.Wait {
 		if err := h.waitForResources(ctx, logger, objects, m.Helmfile.TimeoutSeconds); err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 	}
 
-	return nil
+	return objects, nil
 }
 
 // waitForResources は、指定されたリソースが Ready になるまで待機します
@@ -201,39 +163,6 @@ func (h *Helmfile) waitForResource(ctx context.Context, logger *slog.Logger, obj
 			}
 		}
 	}
-}
-
-func (h *Helmfile) setupGlobalImpl(ctx context.Context, m *v1.Manifest) (*config.GlobalImpl, error) {
-	if m.Helmfile == nil {
-		m.Helmfile = v1.DefaultHelmfile()
-	}
-
-	globalConfig := new(config.GlobalOptions)
-	globalConfig.File = m.Path
-
-	globalImpl := config.NewGlobalImpl(globalConfig)
-	return globalImpl, nil
-}
-
-func (h *Helmfile) setupTemplateImpl(ctx context.Context, m *v1.Manifest, globalImpl *config.GlobalImpl) (*config.TemplateImpl, error) {
-	templateOptions := config.NewTemplateOptions()
-	templateOptions.IncludeCRDs = m.Helmfile.IncludeCRDs
-	if m.Helmfile.KubeVersion != "" {
-		templateOptions.KubeVersion = m.Helmfile.KubeVersion
-	}
-
-	// extraValueFilesを追加
-	if len(m.Helmfile.ExtraValueFiles) > 0 {
-		templateOptions.Values = append(templateOptions.Values, m.Helmfile.ExtraValueFiles...)
-	}
-
-	templateImpl := config.NewTemplateImpl(globalImpl, templateOptions)
-	varSet, err := h.ConstructHelmfileVars(ctx, m)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to construct helmfile vars for manifest %s", m.Path)
-	}
-	templateImpl.SetSet(varSet)
-	return templateImpl, nil
 }
 
 // isResourceReady は、リソースが Ready 状態かどうかを確認します。
@@ -371,38 +300,6 @@ func NewHelmfile(client client.Client, opClient op.Client) *Helmfile {
 	return &Helmfile{client, opClient}
 }
 
-// ref: https://github.com/helmfile/helmfile/blob/b5eb879357d0eae3ad914a38f7221bed94573cb6/pkg/testutil/testutil.go
-func captureStdout(f func() error) (string, error) {
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		return "", err
-	}
-	stdout := os.Stdout
-	defer func() {
-		os.Stdout = stdout
-	}()
-	os.Stdout = writer
-	out := make(chan string, 1)
-	wg := new(sync.WaitGroup)
-	wg.Add(1)
-	var ioCopyErr error
-	go func() {
-		var buf bytes.Buffer
-		defer wg.Done()
-		_, ioCopyErr = io.Copy(&buf, reader)
-		out <- buf.String()
-	}()
-	if err := f(); err != nil {
-		return "", err
-	}
-	_ = writer.Close()
-	wg.Wait()
-	if ioCopyErr != nil {
-		return "", ioCopyErr
-	}
-	return <-out, nil
-}
-
 // Build implements Manager.
 func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (result string, retErr error) {
 	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Helmfile.Build",
@@ -412,35 +309,256 @@ func (h *Helmfile) Build(ctx context.Context, logger *slog.Logger, m v1.Manifest
 		span.End()
 	}()
 
+	// m.Helmfile の nil デフォルト補完は render に集約している。
+	return h.render(ctx, &m)
+}
+
+// renderObjects は helmfile をレンダリングして client.Object 群へ変換します。
+// Apply / Destroy が共通で利用します。
+func (h *Helmfile) renderObjects(ctx context.Context, m *v1.Manifest) ([]client.Object, error) {
+	// m.Helmfile の nil デフォルト補完は render が行うため、render 後は非 nil。
+	out, err := h.render(ctx, m)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	objects, err := manifest.ConvertManifestsToObjects([]byte(out), m.Helmfile.DefaultNamespace)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return objects, nil
+}
+
+// render は helmfile.yaml (サブセット) を解釈し、各 release を helm の in-memory
+// render に通して結合した manifest YAML 文字列を返します。os.Stdout には一切触れません。
+func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	if m.Helmfile == nil {
 		m.Helmfile = v1.DefaultHelmfile()
 	}
 
-	globalImpl, err := h.setupGlobalImpl(ctx, &m)
+	vars, err := h.ConstructHelmfileVars(ctx, m)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to construct helmfile vars for manifest %s", m.Path)
+	}
+
+	// m.Path はファイル (helmfile.yaml) でもディレクトリでも良い。ディレクトリの場合は
+	// helmfile のデフォルト探索順でファイルを解決する (後方互換)。
+	helmfilePath, err := resolveHelmfilePath(m.Path)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
-	templateImpl, err := h.setupTemplateImpl(ctx, &m, globalImpl)
+
+	raw, err := os.ReadFile(helmfilePath)
 	if err != nil {
-		return "", errors.WithStack(err)
+		return "", errors.Wrapf(err, "failed to read helmfile %s", helmfilePath)
 	}
-	a := app.New(templateImpl)
 
-	// Loggerを入れないとsegvで落ちるのでzap loggerを初期化する
-	a.Logger = zap.NewNop().Sugar()
+	// helmfile.yaml 自体を Go テンプレートとして解釈する (.StateValues / .Values)。
+	rendered, err := renderHelmfileTemplate(helmfilePath, raw, vars)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to render helmfile template %s", helmfilePath)
+	}
 
-	// helmfileパッケージではtemplateの書き出しを設定することはできず、
-	// https://github.com/helmfile/helmfile/blob/b5eb879357d0eae3ad914a38f7221bed94573cb6/pkg/testutil/testutil.go という関数を用いて標準出力をキャプチャしています。
-	// 提供されるCaptureOutputではクロージャがerrorを返すことができないため、forkした関数を作ります。
-	out, err := captureStdout(func() error {
-		if err := a.Template(templateImpl); err != nil {
-			return errors.WithStack(err)
+	var spec helmfileSpec
+	if err := yaml.Unmarshal(rendered, &spec); err != nil {
+		return "", errors.Wrapf(err, "failed to parse helmfile %s", helmfilePath)
+	}
+
+	baseDir := filepath.Dir(helmfilePath)
+
+	var docs [][]byte
+	for i := range spec.Releases {
+		rel := spec.Releases[i]
+		out, err := h.renderRelease(baseDir, &rel, m.Helmfile)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to render release %q", rel.Name)
 		}
-		return nil
-	})
+		if trimmed := bytes.TrimSpace([]byte(out)); len(trimmed) > 0 {
+			docs = append(docs, trimmed)
+		}
+	}
+
+	return string(bytes.Join(docs, []byte("\n---\n"))), nil
+}
+
+// defaultHelmfileNames は m.Path がディレクトリのときに探索する helmfile ファイル名の
+// 優先順位。helmfile 本体の既定 (gotmpl 優先) に倣う。
+var defaultHelmfileNames = []string{
+	"helmfile.yaml.gotmpl",
+	"helmfile.yaml",
+	"helmfile.yml.gotmpl",
+	"helmfile.yml",
+}
+
+// resolveHelmfilePath は m.Path がファイルならそのまま、ディレクトリなら既定名で
+// helmfile ファイルを探索して返す。
+func resolveHelmfilePath(path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to stat helmfile path %s", path)
+	}
+	if !info.IsDir() {
+		return path, nil
+	}
+	for _, name := range defaultHelmfileNames {
+		candidate := filepath.Join(path, name)
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	return "", errors.Errorf("no helmfile found in directory %s (looked for %v)", path, defaultHelmfileNames)
+}
+
+// helmfileSpec は解釈可能な helmfile.yaml のサブセットです。
+type helmfileSpec struct {
+	Releases []helmfileRelease `json:"releases"`
+}
+
+// helmfileRelease は 1 つの helm release 宣言です。
+type helmfileRelease struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Chart     string `json:"chart"`
+	Version   string `json:"version"`
+	// Values はファイルパス文字列、またはインライン map のリストです。
+	Values []any `json:"values"`
+}
+
+// renderRelease は 1 release を helm の ClientOnly + DryRun install で render します。
+func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile) (string, error) {
+	if rel.Chart == "" {
+		return "", errors.Errorf("release %q has no chart", rel.Name)
+	}
+
+	chartPath := rel.Chart
+	if !filepath.IsAbs(chartPath) {
+		chartPath = filepath.Join(baseDir, chartPath)
+	}
+
+	chrt, err := loader.Load(chartPath)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to load chart %s", chartPath)
+	}
+
+	// release の values (ファイル + インライン) を順にマージし、最後に
+	// extraValueFiles を上書きとしてマージする (helmfile の --values 相当)。
+	values := map[string]any{}
+	for _, v := range rel.Values {
+		merged, err := loadValueEntry(baseDir, v)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to load values for release %q", rel.Name)
+		}
+		values = mergeMaps(values, merged)
+	}
+	for _, vf := range cfg.ExtraValueFiles {
+		merged, err := loadValueFile(baseDir, vf)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to load extra value file %s", vf)
+		}
+		values = mergeMaps(values, merged)
+	}
+
+	actionCfg := new(action.Configuration)
+	actionCfg.Log = func(string, ...any) {}
+
+	inst := action.NewInstall(actionCfg)
+	inst.ClientOnly = true
+	inst.DryRun = true
+	// Replace により dry-run 時の release 名重複チェックを無効化する (再現性のため)。
+	inst.Replace = true
+	inst.ReleaseName = rel.Name
+	inst.Namespace = rel.Namespace
+	inst.IncludeCRDs = cfg.IncludeCRDs
+
+	if cfg.KubeVersion != "" {
+		kv, err := chartutil.ParseKubeVersion(cfg.KubeVersion)
+		if err != nil {
+			return "", errors.Wrapf(err, "invalid kubeVersion %q", cfg.KubeVersion)
+		}
+		inst.KubeVersion = kv
+	}
+
+	release, err := inst.Run(chrt, values)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 
+	return release.Manifest, nil
+}
+
+// renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
+// helmfile 互換のため .StateValues と .Values の双方から vars を参照できるようにします。
+func renderHelmfileTemplate(path string, raw []byte, vars map[string]any) ([]byte, error) {
+	tmpl, err := template.New(filepath.Base(path)).
+		Funcs(sprig.TxtFuncMap()).
+		Option("missingkey=zero").
+		Parse(string(raw))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	data := map[string]any{
+		"StateValues": vars,
+		"Values":      vars,
+		"Environment": map[string]any{"Name": "default"},
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return buf.Bytes(), nil
+}
+
+// loadValueEntry は helmfile release の values[] の 1 エントリを map に変換します。
+// 文字列ならファイルパスとして読み込み、map ならそのまま採用します。
+func loadValueEntry(baseDir string, entry any) (map[string]any, error) {
+	switch v := entry.(type) {
+	case string:
+		return loadValueFile(baseDir, v)
+	case map[string]any:
+		return v, nil
+	case nil:
+		return map[string]any{}, nil
+	default:
+		return nil, errors.Errorf("unsupported values entry type %T", entry)
+	}
+}
+
+// loadValueFile は value ファイルを読み込み map に変換します。
+func loadValueFile(baseDir, path string) (map[string]any, error) {
+	p := path
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(baseDir, p)
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read value file %s", p)
+	}
+	out := map[string]any{}
+	if err := yaml.Unmarshal(data, &out); err != nil {
+		return nil, errors.Wrapf(err, "failed to parse value file %s", p)
+	}
+	if out == nil {
+		out = map[string]any{}
+	}
 	return out, nil
+}
+
+// mergeMaps は b を a に深くマージします。衝突時は b が優先されます
+// (helm CLI の cli/values.mergeMaps と同一セマンティクス)。
+func mergeMaps(a, b map[string]any) map[string]any {
+	out := make(map[string]any, len(a))
+	maps.Copy(out, a)
+	for k, v := range b {
+		if vMap, ok := v.(map[string]any); ok {
+			if existing, ok := out[k]; ok {
+				if existingMap, ok := existing.(map[string]any); ok {
+					out[k] = mergeMaps(existingMap, vMap)
+					continue
+				}
+			}
+		}
+		out[k] = v
+	}
+	return out
 }

@@ -50,7 +50,7 @@ func TestGenesisSecret_Apply_StdoutOutput(t *testing.T) {
 	m := manager.NewGenesisSecret(client, registry).WithStdout(&buf)
 
 	manifest := v1.Manifest{Path: "testdata/genesis_secret_stdout.yaml"}
-	err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	_, err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
 	assert.NoError(t, err)
 
 	out := buf.String()
@@ -95,7 +95,7 @@ func TestGenesisSecret_Apply_StdoutAndK8sBothSetRejected(t *testing.T) {
 	m := manager.NewGenesisSecret(client, registry).WithStdout(&buf)
 
 	manifest := v1.Manifest{Path: "testdata/genesis_secret_stdout_and_k8s.yaml"}
-	err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	_, err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "both stdout and kubernetesSecret"))
 }

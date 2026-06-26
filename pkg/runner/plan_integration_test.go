@@ -26,8 +26,8 @@ type planBuildManager struct {
 	buildOut string
 }
 
-func (f *planBuildManager) Apply(_ context.Context, _ *slog.Logger, _ v1.Manifest) error {
-	return nil
+func (f *planBuildManager) Apply(_ context.Context, _ *slog.Logger, _ v1.Manifest) ([]client.Object, error) {
+	return nil, nil
 }
 
 func (f *planBuildManager) Destroy(_ context.Context, _ *slog.Logger, _ v1.Manifest) error {
