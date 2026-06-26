@@ -94,7 +94,7 @@ func (k *Kustomize) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manif
 }
 
 // Apply implements Manager.
-func (k *Kustomize) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+func (k *Kustomize) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (objects []client.Object, retErr error) {
 	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Kustomize.Apply",
 		trace.WithAttributes(manifestSpanAttrs(m)...))
 	defer func() {
@@ -106,21 +106,21 @@ func (k *Kustomize) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifes
 	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
 	resourceMap, err := kustomizer.Run(fs, m.Path)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	out, err := resourceMap.AsYaml()
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 
 	if m.Kustomize == nil {
 		m.Kustomize = &v1.ManifestKustomize{}
 	}
 
-	objects, err := manifest.ConvertManifestsToObjects(out, m.Kustomize.DefaultNamespace)
+	objects, err = manifest.ConvertManifestsToObjects(out, m.Kustomize.DefaultNamespace)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, errors.WithStack(err)
 	}
 	logger.DebugContext(ctx, "successfully converted manifests to objects", slog.Int("count", len(objects)))
 	span.SetAttributes(attribute.Int("manifest.objects", len(objects)))
@@ -128,11 +128,11 @@ func (k *Kustomize) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifes
 	for _, obj := range objects {
 		logger.DebugContext(ctx, "trying to create or update an object", slog.String("namespace", obj.GetNamespace()), slog.String("name", obj.GetName()))
 		if err := resource.CreateOrUpdateForObject(ctx, k.client, obj); err != nil {
-			return errors.WithStack(err)
+			return nil, errors.WithStack(err)
 		}
 	}
 
-	return nil
+	return objects, nil
 }
 
 var _ Manager = &Kustomize{}

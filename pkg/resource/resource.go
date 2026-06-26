@@ -12,15 +12,56 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// CreateOrUpdateForObject は既存リソースがあればUpdate、なければCreateを行う。
-// JobやPodなどimmutableなフィールドを持つリソースはDelete→Createで対応する。
+// fieldManager は Server-Side Apply の FieldOwner 名。
+// この名前で managedFields に所有権が記録される。
+const fieldManager = "tazuna"
+
+// CreateOrUpdateForObject はリソースを Server-Side Apply (SSA) で適用する。
+//
+// 以前は Get してから ResourceVersion を引き継いだ full overwrite Update を行っていたが、
+// それではコントローラやデフォルティングが設定したフィールドまで踏み潰してしまう。
+// SSA + FieldOwner("tazuna") に切り替えることで、tazuna が宣言したフィールドのみを所有し、
+// 他者が管理するフィールドを保持できる。ForceOwnership により、過去に別マネージャ
+// (kubectl など) が所有していたフィールドも tazuna が引き取る (bootstrap 用途として妥当)。
+//
+// JobやPodなどspecの大半がimmutableなリソースはSSAでも衝突するため、従来どおり
+// Delete→Createで対応する。
 func CreateOrUpdateForObject(
 	ctx context.Context,
 	c client.Client,
 	obj client.Object,
 ) error {
+	gvk := obj.GetObjectKind().GroupVersionKind()
+
+	// JobはimmutableなフィールドがありSSAでも衝突するため、Delete→Createで対応する。
+	// Podもspec内のほとんどのフィールドがimmutableなため同様に対応する。
+	if (gvk.Group == "batch" && gvk.Kind == "Job") || (gvk.Group == "" && gvk.Kind == "Pod") {
+		return recreateImmutableObject(ctx, c, obj)
+	}
+
+	// SSA は desired を直接 Apply する。tazuna は任意の CRD を unstructured で扱うため、
+	// ApplyConfigurationFromUnstructured で動的に ApplyConfiguration を構築する。
+	// managedFields / resourceVersion は SSA では不要 (含めると衝突の原因になる) なので
+	// 落としてから適用する。
+	u, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		return errors.Errorf("server-side apply requires *unstructured.Unstructured, got %T", obj)
+	}
+	applyObj := u.DeepCopy()
+	applyObj.SetResourceVersion("")
+	applyObj.SetManagedFields(nil)
+
+	if err := c.Apply(ctx, client.ApplyConfigurationFromUnstructured(applyObj), client.FieldOwner(fieldManager), client.ForceOwnership); err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
+}
+
+// recreateImmutableObject は immutable なリソース (Job/Pod) を Delete→Create で再適用する。
+func recreateImmutableObject(ctx context.Context, c client.Client, obj client.Object) error {
+	gvk := obj.GetObjectKind().GroupVersionKind()
 	dummy := &unstructured.Unstructured{}
-	dummy.SetGroupVersionKind(obj.GetObjectKind().GroupVersionKind())
+	dummy.SetGroupVersionKind(gvk)
 	key := types.NamespacedName{
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
@@ -28,28 +69,17 @@ func CreateOrUpdateForObject(
 
 	err := c.Get(ctx, key, dummy)
 	if err == nil {
-		// JobはimmutableなフィールドがありUpdateできないため、Delete→Createで対応する
-		// Podもspec内のほとんどのフィールドがimmutableなため同様に対応する
-		gvk := obj.GetObjectKind().GroupVersionKind()
-		if (gvk.Group == "batch" && gvk.Kind == "Job") || (gvk.Group == "" && gvk.Kind == "Pod") {
-			if err := c.Delete(ctx, dummy); err != nil {
-				return errors.WithStack(err)
-			}
-			slog.InfoContext(ctx, "waiting for deletion to complete",
-				slog.String("namespace", obj.GetNamespace()),
-				slog.String("name", obj.GetName()),
-				slog.String("kind", gvk.Kind))
-			if err := WaitForDeletion(ctx, c, dummy); err != nil {
-				return errors.WithStack(err)
-			}
-			if err := c.Create(ctx, obj); err != nil {
-				return errors.WithStack(err)
-			}
-			return nil
+		if err := c.Delete(ctx, dummy); err != nil {
+			return errors.WithStack(err)
 		}
-
-		obj.SetResourceVersion(dummy.GetResourceVersion())
-		if err := c.Update(ctx, obj); err != nil {
+		slog.InfoContext(ctx, "waiting for deletion to complete",
+			slog.String("namespace", obj.GetNamespace()),
+			slog.String("name", obj.GetName()),
+			slog.String("kind", gvk.Kind))
+		if err := WaitForDeletion(ctx, c, dummy); err != nil {
+			return errors.WithStack(err)
+		}
+		if err := c.Create(ctx, obj); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil
@@ -59,7 +89,6 @@ func CreateOrUpdateForObject(
 		if err := c.Create(ctx, obj); err != nil {
 			return errors.WithStack(err)
 		}
-
 		return nil
 	}
 

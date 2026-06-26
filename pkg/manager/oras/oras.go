@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // orasTracerName is the OpenTelemetry tracer name for the ORAS manager.
@@ -60,7 +61,7 @@ func orasRecordSpanError(span trace.Span, err error) {
 // 親パッケージ pkg/manager から pkg/manager/oras を import する想定 (commit 6) のため、
 // 循環依存を避ける目的でローカルに interface を再定義している。
 type DelegateManager interface {
-	Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) error
+	Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) ([]client.Object, error)
 	Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) error
 	Build(ctx context.Context, logger *slog.Logger, m v1.Manifest) (string, error)
 }
@@ -91,7 +92,8 @@ func NewWithOptions(puller Puller, helmfile, kustomize DelegateManager, opts Pul
 }
 
 // Apply は artifact を pull し、委譲先 manager の Apply を呼びます。
-func (o *ORAS) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
+// 委譲先が返す render 済みオブジェクトをそのまま透過的に返します。
+func (o *ORAS) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (objects []client.Object, retErr error) {
 	ctx, span := otel.Tracer(orasTracerName).Start(ctx, "ORAS.Apply",
 		trace.WithAttributes(orasManifestSpanAttrs(m)...))
 	defer func() {
@@ -101,7 +103,7 @@ func (o *ORAS) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest) (r
 
 	delegate, delegated, err := o.prepareDelegate(ctx, logger, m)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	return delegate.Apply(ctx, logger, delegated)
 }

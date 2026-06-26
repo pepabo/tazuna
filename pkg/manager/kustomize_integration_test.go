@@ -30,7 +30,7 @@ func TestKustomize_Apply(t *testing.T) {
 	}
 	// 冪等性が担保されていることのテストをするために、テスト関数を定義して複数回呼ぶ
 	testFn := func(t *testing.T) {
-		err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+		_, err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
 		assert.NoError(t, err)
 
 		dep := appsv1.Deployment{}
@@ -63,7 +63,7 @@ func TestKustomize_Apply_JobIdempotency(t *testing.T) {
 	}
 
 	testFn := func(t *testing.T) {
-		err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+		_, err := m.Apply(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
 		assert.NoError(t, err)
 
 		job := batchv1.Job{}
