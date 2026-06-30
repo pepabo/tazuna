@@ -1,0 +1,8 @@
+# OCI チャート参照の render を検証するための helmfile。
+# chart: oci://... を helm registry client 経由で pull できることを確認する。
+# 安定して存在する public ECR の karpenter-crd を利用する (CRD のみで values 不要)。
+releases:
+  - name: karpenter-crd
+    namespace: karpenter
+    chart: oci://public.ecr.aws/karpenter/karpenter-crd
+    version: 1.5.6
