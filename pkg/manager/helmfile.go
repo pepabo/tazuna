@@ -25,6 +25,8 @@ import (
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
+	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/registry"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
@@ -43,7 +45,9 @@ import (
 // インスピレーション元として helmfile をクレジットします。本実装が解釈する helmfile.yaml
 // は以下のサブセットです (差分は docs/src/reference/manifest-types/helmfile.md を参照):
 //   - releases[].{name,namespace,chart,version,values}
-//   - chart はローカルチャートへの相対パス (リポジトリ chart は未サポート)
+//   - chart はローカルチャートへの相対パス、または oci:// で始まる OCI チャート参照。
+//     OCI の場合は version を指定し、helm registry client 経由で pull する
+//     (http(s) repository chart は未サポート)。
 //   - values[] はファイルパス文字列、またはインライン map
 //   - helmfile.yaml 自体の Go テンプレート (.StateValues / .Values) と sprig 関数
 type Helmfile struct {
@@ -429,9 +433,41 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 		return "", errors.Errorf("release %q has no chart", rel.Name)
 	}
 
-	chartPath := rel.Chart
-	if !filepath.IsAbs(chartPath) {
-		chartPath = filepath.Join(baseDir, chartPath)
+	actionCfg := new(action.Configuration)
+	actionCfg.Log = func(string, ...any) {}
+
+	// OCI チャート (chart: oci://...) は helm registry client 経由で pull する必要が
+	// あるため、actionCfg.RegistryClient を NewInstall 前に設定しておく
+	// (action.NewInstall が ChartPathOptions.registryClient にコピーする)。
+	if registry.IsOCI(rel.Chart) {
+		registryClient, err := registry.NewClient()
+		if err != nil {
+			return "", errors.Wrap(err, "failed to create helm registry client")
+		}
+		actionCfg.RegistryClient = registryClient
+	}
+
+	inst := action.NewInstall(actionCfg)
+	inst.ClientOnly = true
+	inst.DryRun = true
+	// Replace により dry-run 時の release 名重複チェックを無効化する (再現性のため)。
+	inst.Replace = true
+	inst.ReleaseName = rel.Name
+	inst.Namespace = rel.Namespace
+	inst.IncludeCRDs = cfg.IncludeCRDs
+	inst.Version = rel.Version
+
+	if cfg.KubeVersion != "" {
+		kv, err := chartutil.ParseKubeVersion(cfg.KubeVersion)
+		if err != nil {
+			return "", errors.Wrapf(err, "invalid kubeVersion %q", cfg.KubeVersion)
+		}
+		inst.KubeVersion = kv
+	}
+
+	chartPath, err := h.resolveChartPath(inst, baseDir, rel.Chart)
+	if err != nil {
+		return "", errors.WithStack(err)
 	}
 
 	chrt, err := loader.Load(chartPath)
@@ -457,32 +493,33 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 		values = mergeMaps(values, merged)
 	}
 
-	actionCfg := new(action.Configuration)
-	actionCfg.Log = func(string, ...any) {}
-
-	inst := action.NewInstall(actionCfg)
-	inst.ClientOnly = true
-	inst.DryRun = true
-	// Replace により dry-run 時の release 名重複チェックを無効化する (再現性のため)。
-	inst.Replace = true
-	inst.ReleaseName = rel.Name
-	inst.Namespace = rel.Namespace
-	inst.IncludeCRDs = cfg.IncludeCRDs
-
-	if cfg.KubeVersion != "" {
-		kv, err := chartutil.ParseKubeVersion(cfg.KubeVersion)
-		if err != nil {
-			return "", errors.Wrapf(err, "invalid kubeVersion %q", cfg.KubeVersion)
-		}
-		inst.KubeVersion = kv
-	}
-
 	release, err := inst.Run(chrt, values)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
 
 	return release.Manifest, nil
+}
+
+// resolveChartPath は chart 参照をローカルの chart パス (ディレクトリ or .tgz) に解決します。
+//   - oci://... の場合は helm registry client で pull し、cache 上の .tgz パスを返す。
+//   - それ以外はローカル chart とみなし、相対パスは baseDir 起点で解決する (従来挙動)。
+func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef string) (string, error) {
+	if registry.IsOCI(chartRef) {
+		// LocateChart は OCI 参照を pull し、HELM_REPOSITORY_CACHE 配下の
+		// .tgz への絶対パスを返す。version は inst.ChartPathOptions.Version を参照する。
+		cp, err := inst.LocateChart(chartRef, cli.New())
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to pull oci chart %s", chartRef)
+		}
+		return cp, nil
+	}
+
+	chartPath := chartRef
+	if !filepath.IsAbs(chartPath) {
+		chartPath = filepath.Join(baseDir, chartPath)
+	}
+	return chartPath, nil
 }
 
 // renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
