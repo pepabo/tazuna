@@ -288,6 +288,27 @@ func TestHelmfile_ConstructHelmfileVars_WithHint(t *testing.T) {
 	})
 }
 
+// TestHelmfile_Build_OCIChart は chart: oci://... 参照が helm registry client 経由で
+// pull され、render できることを検証する。public ECR への network access を要するため
+// integration タグ下でのみ実行する。
+func TestHelmfile_Build_OCIChart(t *testing.T) {
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-oci/helmfile.yaml",
+		Helmfile: &v1.ManifestHelmfile{
+			IncludeCRDs: true,
+		},
+	}
+
+	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.NoError(t, err)
+	// karpenter-crd チャートは CRD を含むため、render 結果に CRD が現れる。
+	assert.Contains(t, out, "kind: CustomResourceDefinition")
+	assert.Contains(t, out, "karpenter")
+}
+
 func stringPtr(s string) *string {
 	return &s
 }
