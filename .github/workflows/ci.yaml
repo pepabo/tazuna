@@ -49,10 +49,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: test
       run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
     - name: coverage summary
@@ -103,10 +103,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Cache golangci-lint
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
@@ -143,14 +143,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
-    - name: Install Helm # helmfile managerのintegrationテストにhelmが必要
-      uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
-      with:
-        version: v3.17.0
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Integration Tests
       run: go test -tags=integration ./...
 
@@ -159,11 +155,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      HELM_VERSION: v3.17.0
       KIND_VERSION: v0.31.0
       KIND_NODE_IMAGE: kindest/node:v1.32.0
-      HELMFILE_VERSION: v1.4.4
-      KUSTOMIZE_VERSION: v5.8.1
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
     - name: Set up Go
@@ -182,10 +175,10 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.go/cache
-        key: ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
+        key: ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-${{ hashFiles('go.sum') }}-
-          ${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-go-build-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-${{ hashFiles('go.sum') }}-
+          ${{ runner.os }}-${{ runner.arch }}-go-build-
     - name: Set up home directory and PATH
       run: |
         if [ -z "$HOME" ] || [ ! -d "$HOME" ]; then
@@ -203,24 +196,14 @@ jobs:
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: |
-          ~/.local/bin/helm
           ~/.local/bin/kubectl
           ~/.local/bin/kind
-          ~/.local/bin/helmfile
-          ~/.local/bin/kustomize
-        key: binaries-${{ runner.os }}-helm-${{ env.HELM_VERSION }}-kind-${{ env.KIND_VERSION }}-helmfile-${{ env.HELMFILE_VERSION }}-kustomize-${{ env.KUSTOMIZE_VERSION }}
+        key: binaries-${{ runner.os }}-kubectl-kind-${{ env.KIND_VERSION }}
         restore-keys: |
-          binaries-${{ runner.os }}-helm-${{ env.HELM_VERSION }}-kind-${{ env.KIND_VERSION }}-helmfile-${{ env.HELMFILE_VERSION }}-
+          binaries-${{ runner.os }}-kubectl-kind-
     - name: Create binary directory
       run: |
         mkdir -p "$HOME/.local/bin"
-    - name: Install Helm
-      if: steps.cache-binaries.outputs.cache-hit != 'true'
-      run: |
-        curl -fsSL https://get.helm.sh/helm-${{ env.HELM_VERSION }}-linux-amd64.tar.gz -o helm.tar.gz
-        tar -zxvf helm.tar.gz
-        mv linux-amd64/helm ~/.local/bin/helm
-        chmod +x ~/.local/bin/helm
     - name: Install kubectl
       if: steps.cache-binaries.outputs.cache-hit != 'true'
       run: |
@@ -233,30 +216,13 @@ jobs:
         curl -Lo ./kind https://kind.sigs.k8s.io/dl/${{ env.KIND_VERSION }}/kind-linux-amd64
         chmod +x ./kind
         mv ./kind ~/.local/bin/kind
-    - name: Install Helmfile
-      if: steps.cache-binaries.outputs.cache-hit != 'true'
-      run: |
-        wget https://github.com/helmfile/helmfile/releases/download/${{ env.HELMFILE_VERSION }}/helmfile_$(echo ${{ env.HELMFILE_VERSION }} | sed 's/v//')_linux_amd64.tar.gz
-        tar -zxvf helmfile_$(echo ${{ env.HELMFILE_VERSION }} | sed 's/v//')_linux_amd64.tar.gz
-        chmod +x helmfile
-        mv helmfile ~/.local/bin/
-    - name: Install kustomize
-      if: steps.cache-binaries.outputs.cache-hit != 'true'
-      run: |
-        curl -fsSL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${{ env.KUSTOMIZE_VERSION }}/kustomize_${{ env.KUSTOMIZE_VERSION }}_linux_amd64.tar.gz -o kustomize.tar.gz
-        tar -zxvf kustomize.tar.gz
-        chmod +x kustomize
-        mv kustomize ~/.local/bin/
     - name: Verify binary versions
       run: |
         export PATH="$HOME/.local/bin:$PATH"
         echo "PATH: $PATH"
         echo "HOME: $HOME"
-        helm version
         kubectl version --client
         kind version
-        helmfile version
-        kustomize version
     - name: Setup kind cluster and build binary
       run: |
         # Build the tazuna binary in parallel with kind cluster setup.
