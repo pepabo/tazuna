@@ -70,6 +70,41 @@ func TestTazunaSpec_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestTazunaSpec_RoundTrip_Environments(t *testing.T) {
+	t.Parallel()
+	src := Tazuna{
+		Spec: TazunaSpec{
+			ContextMatches: []string{"^root-.*$"},
+			Environments: map[string]EnvironmentSpec{
+				"prod": {
+					ContextMatches:   []string{"^prod-.*$"},
+					ContextMatchMode: ContextMatchModeAND,
+				},
+				"staging": {
+					ContextMatches: []string{"^staging-.*$"},
+				},
+			},
+			Manifests: []Manifest{{Name: "app", Type: ManifestTypeKustomize, Path: "./app"}},
+		},
+	}
+
+	got := roundTripTazuna(t, src)
+	if len(got.Spec.Environments) != 2 {
+		t.Fatalf("Environments len = %d, want 2", len(got.Spec.Environments))
+	}
+	prod := got.Spec.Environments["prod"]
+	if len(prod.ContextMatches) != 1 || prod.ContextMatches[0] != "^prod-.*$" {
+		t.Errorf("prod.ContextMatches = %v", prod.ContextMatches)
+	}
+	if prod.ContextMatchMode != ContextMatchModeAND {
+		t.Errorf("prod.ContextMatchMode = %q, want %q", prod.ContextMatchMode, ContextMatchModeAND)
+	}
+	staging := got.Spec.Environments["staging"]
+	if staging.ContextMatchMode != "" {
+		t.Errorf("staging.ContextMatchMode = %q, want empty", staging.ContextMatchMode)
+	}
+}
+
 func TestTazunaSpec_RoundTrip_OmitContextFields(t *testing.T) {
 	t.Parallel()
 	src := Tazuna{

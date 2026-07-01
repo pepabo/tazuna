@@ -59,9 +59,10 @@ Examples:
 		if err != nil {
 			return err
 		}
-		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts))
+		environment := cliutil.Environment(cmd)
+		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts), runner.WithEnvironment(environment))
 
-		tazuna, err := cliutil.LoadTazunaYAML(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
 		if err != nil {
 			return err
 		}
@@ -71,8 +72,12 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		if len(tazuna.Spec.ContextMatches) > 0 {
-			if err := tazunacontext.ValidateCurrentContext(tazuna.Spec.ContextMatches, tazuna.Spec.ContextMatchMode); err != nil {
+		contextMatches, contextMatchMode, err := cliutil.ResolveContextMatches(tazuna.Spec, environment)
+		if err != nil {
+			return err
+		}
+		if len(contextMatches) > 0 {
+			if err := tazunacontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
 				return err
 			}
 		}

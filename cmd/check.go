@@ -49,7 +49,7 @@ Examples:
 			return errors.WithStack(err)
 		}
 
-		tazuna, err := cliutil.LoadTazunaYAML(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
 		if err != nil {
 			return err
 		}
@@ -63,11 +63,17 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
+		// -e が渡されている場合、その環境が spec.environments に宣言されているかを
+		// この時点で検証しておくことで、apply/destroy 前に設定ミスを検知できる。
+		if _, _, err := cliutil.ResolveContextMatches(tazuna.Spec, cliutil.Environment(cmd)); err != nil {
+			return err
+		}
+
 		logger, err := cliutil.NewLogger(cmd)
 		if err != nil {
 			return err
 		}
-		r := runner.NewTazunaRunner(logger, nil, nil)
+		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
 
 		if fix {
 			if err := r.CheckAndFix(ctx, tazuna, absPath); err != nil {
