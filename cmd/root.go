@@ -44,6 +44,10 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().StringP("file-path", "f", "tazuna.yaml", "Path to tazuna.yaml")
 	rootCmd.PersistentFlags().StringP("log-level", "l", "info", "log level(debug/info/warn/error)")
+	// --environment はtazuna.yamlを描画する {{ .Environment }} の値になり、かつ
+	// spec.environments.<name> の context_matches を選択する。空 (default) のときは
+	// ルート直下の context_matches が使われ、{{ .Environment }} は空文字列に展開される。
+	rootCmd.PersistentFlags().StringP("environment", "e", "", "Environment name; selects spec.environments.<name> and is exposed to tazuna.yaml as {{ .Environment }}")
 	// OpenTelemetry tracing は短命 CLI 向けに opt-in 設計。
 	// --otlp-endpoint が空文字 (default) のときは no-op tracer を使うため外部依存ゼロ。
 	// 例: --otlp-endpoint=localhost:4317 で OTLP/gRPC collector に出力する。

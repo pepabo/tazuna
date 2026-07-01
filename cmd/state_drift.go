@@ -57,9 +57,9 @@ Examples:
 			return err
 		}
 
-		r := runner.NewTazunaRunner(logger, k8sClient, nil)
+		r := runner.NewTazunaRunner(logger, k8sClient, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
 
-		tazuna, err := cliutil.LoadTazunaYAML(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
 		if err != nil {
 			return err
 		}

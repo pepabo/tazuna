@@ -36,6 +36,7 @@ spec:
 | `manifests`            | [[Manifest](#manifest)]    | ◯    | -          | Tazuna が処理する Manifest の配列。空配列は許容されません。`dependsOn` が使われていれば依存グラフから導出した層順、未使用なら宣言順で実行されます。 |
 | `context_matches`      | [string]                    | -    | `[]`       | 現在の kubeconfig context 名がマッチすべき正規表現の配列。空でなければ `apply` / `destroy` 前に評価されます。 |
 | `context_match_mode`   | string                      | -    | `or`       | `context_matches` の評価モード。`or`（いずれかに一致）または `and`（すべてに一致）。 |
+| `environments`         | map[string][EnvironmentSpec](#environments) | - | `{}` | 環境名をキーとする環境ごとの設定マップ。`-e/--environment <name>` で選択します。詳細は [`environments`](#environments) 参照。 |
 | `tests`                | [[TestPluginSpec](#tests-フィールド)] | - | `[]` | すべての Manifest 適用後に実行される Test plugin の配列。 |
 | `providers`            | [[ProviderConfig](#providers)] | - | `[]`      | GenesisSecret から参照される Secret provider の宣言リスト。組み込みの `default-op` 以外を使う場合に書きます。 |
 
@@ -82,6 +83,107 @@ spec:
   context_match_mode: and
   manifests: []
 ```
+
+### `environments`
+
+`environments` は **環境名をキーとするマップ** です。`-e/--environment <name>`
+フラグで環境を選択すると、ルート直下の `context_matches` / `context_match_mode`
+の代わりに、選択した環境のものが使われます。同じ `tazuna.yaml` を staging / production
+など複数のクラスタに向けて安全に使い回すための仕組みです。
+
+各エントリ（`EnvironmentSpec`）は次のフィールドを持ちます。
+
+| フィールド           | 型       | 必須 | デフォルト | 説明 |
+|----------------------|----------|------|------------|------|
+| `context_matches`    | [string] | -    | `[]`       | この環境で有効にする `context_matches` パターン。ルート直下の `context_matches` を **完全に置き換えます**（マージしません）。 |
+| `context_match_mode` | string   | -    | ルートの値 | この環境における評価モード。空ならルート直下の `context_match_mode` を継承し、それも空なら `or` になります。 |
+
+解決ルール:
+
+- `-e` を **渡さない** 場合、`environments` は無視され、ルート直下の
+  `context_matches` / `context_match_mode` が使われます（従来どおりの挙動）。
+- `-e <name>` を渡した場合、`environments.<name>` が使われます。ルート直下の
+  `context_matches` は参照されません。
+- `-e <name>` に対応する環境が `environments` に **宣言されていない** 場合、
+  `apply` / `destroy` / `check` はエラーで終了します。
+- `environments.<name>.context_matches` が空（または未設定）の場合、その環境では
+  context チェックは行われません。
+
+`-e` は同時に `{{ .Environment }}` テンプレート変数の値にもなります
+（[テンプレート変数](#テンプレート変数) 参照）。`environments` と組み合わせると、
+「環境名でマニフェストの値を差し替えつつ、その環境向けの context だけを許可する」
+といった使い方ができます。
+
+例:
+
+```yaml
+spec:
+  # -e を渡さないローカル実行ではこちらが使われる
+  context_matches:
+    - ^kind-
+  environments:
+    staging:
+      context_matches:
+        - ^staging-tokyo$
+        - ^staging-osaka$
+      context_match_mode: or
+    production:
+      context_matches:
+        - ^prod-tokyo$
+      context_match_mode: and
+  manifests:
+    - name: app
+      type: kustomize
+      path: ./overlays/{{ .Environment }}
+```
+
+```console
+# staging クラスタに向けて apply（current-context が ^staging-* でないと中断）
+$ tazuna apply -e staging
+
+# production クラスタに向けて apply
+$ tazuna apply -e production
+```
+
+## テンプレート変数
+
+`tazuna.yaml`（および `includes` で読み込まれるファイル）は、YAML としてパースされる
+**前に一度 Go の [text/template](https://pkg.go.dev/text/template) として描画** されます。
+これにより、環境ごとに異なる値を 1 つのファイルから注入できます。
+
+### 仕組みと動き
+
+1. `tazuna` は指定された `tazuna.yaml` を読み込みます。
+2. ファイル全体を Go template として解釈し、後述の変数を適用して描画します。
+3. 描画後の文字列を YAML としてパースします。
+4. `includes` で読み込まれるファイルも、同じ変数で同様に描画されます。
+
+`apply` / `destroy` / `build` / `plan` / `check` / `status` / `tags` / `state *` など、
+`tazuna.yaml` を読み込む **すべての操作** で描画が行われます。`-e` を渡さなかった場合、
+`{{ .Environment }}` は **空文字列** に展開されます。
+
+### 対応している変数
+
+| 変数              | 型     | 説明 |
+|-------------------|--------|------|
+| `{{ .Environment }}` | string | `-e/--environment` フラグの値。未指定時は空文字列。 |
+
+### 注意点
+
+- 描画は **ファイル全体** に対して行われます。`{{` や `}}` を YAML の値として
+  そのまま出力したい場合は `{{ "{{" }}` / `{{ "}}" }}` のようにエスケープしてください。
+- 存在しない変数（例: `{{ .Unknown }}`）を参照すると描画時にエラーになります。
+- Helmfile の value ファイルや Helm chart のテンプレートは `tazuna` の描画対象では
+  ありません（それらは helmfile / helm 側で処理されます）。あくまで `tazuna.yaml`
+  本体と `includes` 対象ファイルのみが描画されます。
+
+### ユースケース
+
+- **オーバーレイの切り替え**: `path: ./overlays/{{ .Environment }}` のように、
+  環境名でマニフェストのパスを切り替える。
+- **ネームスペースやラベルの差し替え**: `defaultNamespace: {{ .Environment }}` など。
+- **`environments` と併用**: `{{ .Environment }}` で値を差し替えつつ、その環境の
+  `context_matches` で対象クラスタを限定し、誤ったクラスタへの適用を防ぐ。
 
 ## Manifest
 

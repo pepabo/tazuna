@@ -50,6 +50,10 @@ type TazunaRunner struct {
 	// StateDiff の入口で設定される。直接 ApplyToCluster 等を呼ぶテストでは空のままで
 	// 構わない (envfile provider を使わない限り影響しない)。
 	providersBaseDir string
+	// environment は -e/--environment フラグの値。include ファイルを Go template として
+	// 描画する際に {{ .Environment }} へ注入される。tazuna.yaml 本体は cliutil 側で描画
+	// 済みだが、include ファイルは runner が展開時に読み込むためここで保持する。
+	environment string
 }
 
 type RunnerOption func(*TazunaRunner)
@@ -203,6 +207,15 @@ func (t *TazunaRunner) ConvertManifestPathFromCwd(baseDir string, tazuna *v1.Taz
 func WithTags(tags []string) RunnerOption {
 	return func(r *TazunaRunner) {
 		r.tags = tags
+	}
+}
+
+// WithEnvironment は -e/--environment フラグの値を設定します。include ファイルを
+// Go template として描画する際の {{ .Environment }} に注入されます。未指定時は
+// 空文字列のままで、従来どおり include ファイルはそのまま解釈されます。
+func WithEnvironment(environment string) RunnerOption {
+	return func(r *TazunaRunner) {
+		r.environment = environment
 	}
 }
 
