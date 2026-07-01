@@ -35,6 +35,7 @@ func TestRootPersistentFlags(t *testing.T) {
 	for _, spec := range []flagSpec{
 		{name: "file-path", defaultVal: "tazuna.yaml"},
 		{name: "log-level", defaultVal: "info"},
+		{name: "environment", defaultVal: ""},
 	} {
 		if f := rootCmd.PersistentFlags().Lookup(spec.name); f == nil {
 			t.Errorf("root persistent flag %q missing", spec.name)

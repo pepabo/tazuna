@@ -9,6 +9,7 @@
   - [用語集](./concepts/glossary.md)
 - [ガイド](./guides/index.md)
   - [最初の tazuna.yaml を書く](./guides/first-tazuna-yaml.md)
+  - [環境ごとに設定を切り替える](./guides/environments.md)
 - [運用](./operations/index.md)
   - [`tazuna destroy` の運用](./operations/destroy-runbook.md)
   - [Drift モニタリング](./operations/drift-monitoring.md)

@@ -40,13 +40,30 @@ type TazunaSpec struct {
 	ContextMatches []string `json:"context_matches,omitempty"`
 	// ContextMatchModeはcontext_matchesの評価モードです（"or" または "and"、デフォルトは "or"）
 	ContextMatchMode ContextMatchMode `json:"context_match_mode,omitempty"`
-	Manifests        []Manifest       `json:"manifests"`
+	// Environments は環境ごとの設定を宣言するマップです。キーが環境名になります。
+	// `-e/--environment <name>` が渡されたとき、ルート直下の context_matches /
+	// context_match_mode ではなく、ここで宣言した環境固有の値が使われます。
+	// 未指定または `-e` が渡されない場合はルート直下の設定がそのまま使われます。
+	Environments map[string]EnvironmentSpec `json:"environments,omitempty"`
+	Manifests    []Manifest                 `json:"manifests"`
 	// Testsはすべてのマニフェスト適用が終わったあとに実行されます
 	Tests []TestPluginSpec `json:"tests"`
 	// Providers は Secret provider の宣言リストです。未指定時は組み込みの "default-op"
 	// (1Password) のみが利用可能であり、これは GenesisSecret の .spec.provider が空文字
 	// だった場合の後方互換フォールバックとして利用されます。
 	Providers []ProviderConfig `json:"providers,omitempty"`
+}
+
+// EnvironmentSpec は 1 つの環境 (`environments.<name>`) の設定を定義します。
+// `-e/--environment <name>` が渡されたとき、ルート直下の同名フィールドの代わりに
+// ここで宣言した値が使われます。
+type EnvironmentSpec struct {
+	// ContextMatches はこの環境で有効にする context_matches パターンのリストです。
+	// ルート直下の context_matches を完全に置き換えます (マージはしません)。
+	ContextMatches []string `json:"context_matches,omitempty"`
+	// ContextMatchMode はこの環境における context_matches の評価モードです。
+	// 空の場合はルート直下の context_match_mode を継承し、それも空なら "or" になります。
+	ContextMatchMode ContextMatchMode `json:"context_match_mode,omitempty"`
 }
 
 // IncludeFile はincludeするファイルを定義します

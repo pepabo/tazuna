@@ -37,9 +37,14 @@ untouched.
 The target cluster is determined by the kubeconfig context.
 When context_matches is configured, the current context name is validated.
 
+With -e/--environment <name>, spec.environments.<name>.context_matches is used
+instead of the root context_matches, and {{ .Environment }} in tazuna.yaml is
+rendered to <name>.
+
 Examples:
   tazuna apply -f tazuna.yaml
   tazuna apply -f tazuna.yaml --tags web,batch
+  tazuna apply -f tazuna.yaml -e production
   tazuna apply -f tazuna.yaml --log-level debug
   tazuna apply -f tazuna.yaml --sync
   tazuna apply -f tazuna.yaml --sync --prune
@@ -102,6 +107,8 @@ Examples:
 			Atomic: atomic,
 		}
 
+		environment := cliutil.Environment(cmd)
+
 		r := runner.NewTazunaRunner(
 			logger,
 			k8sClient,
@@ -109,9 +116,10 @@ Examples:
 			runner.WithTags(tags),
 			runner.WithORASPullOptions(orasOpts),
 			runner.WithApplyOptions(applyOpts),
+			runner.WithEnvironment(environment),
 		)
 
-		tazuna, err := cliutil.LoadTazunaYAML(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
 		if err != nil {
 			return err
 		}
@@ -121,8 +129,12 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		if len(tazuna.Spec.ContextMatches) > 0 {
-			if err := tazunacontext.ValidateCurrentContext(tazuna.Spec.ContextMatches, tazuna.Spec.ContextMatchMode); err != nil {
+		contextMatches, contextMatchMode, err := cliutil.ResolveContextMatches(tazuna.Spec, environment)
+		if err != nil {
+			return err
+		}
+		if len(contextMatches) > 0 {
+			if err := tazunacontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
 				return err
 			}
 		}
