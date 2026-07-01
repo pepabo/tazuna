@@ -529,6 +529,73 @@ func TestValidateTazunaSpec_ContextMatches(t *testing.T) {
 	}
 }
 
+func TestValidateTazunaSpec_Environments(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		spec      *v1.TazunaSpec
+		expectErr bool
+		errMsg    string
+	}{
+		{
+			name: "valid environment",
+			spec: &v1.TazunaSpec{
+				Environments: map[string]v1.EnvironmentSpec{
+					"prod": {ContextMatches: []string{"^prod-.*$"}, ContextMatchMode: v1.ContextMatchModeAND},
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "environment with empty mode is valid",
+			spec: &v1.TazunaSpec{
+				Environments: map[string]v1.EnvironmentSpec{
+					"staging": {ContextMatches: []string{"^staging-.*$"}},
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "environment with invalid regex",
+			spec: &v1.TazunaSpec{
+				Environments: map[string]v1.EnvironmentSpec{
+					"prod": {ContextMatches: []string{"[invalid"}},
+				},
+			},
+			expectErr: true,
+			errMsg:    `environments["prod"].context_matches[0] is not a valid regex`,
+		},
+		{
+			name: "environment with invalid mode",
+			spec: &v1.TazunaSpec{
+				Environments: map[string]v1.EnvironmentSpec{
+					"prod": {ContextMatches: []string{"^prod-.*$"}, ContextMatchMode: "xor"},
+				},
+			},
+			expectErr: true,
+			errMsg:    `environments["prod"].context_match_mode must be 'or' or 'and'`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := ValidateTazunaSpec(tt.spec, "")
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("expected error but got nil")
+					return
+				}
+				if tt.errMsg != "" && !containsString(err.Error(), tt.errMsg) {
+					t.Errorf("expected error message to contain '%s', but got: %s", tt.errMsg, err.Error())
+				}
+			} else if err != nil {
+				t.Errorf("expected no error but got: %v", err)
+			}
+		})
+	}
+}
+
 func TestValidateTazunaTypeMeta(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

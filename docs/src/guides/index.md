@@ -15,6 +15,9 @@
 1. **[最初の tazuna.yaml を書く](./first-tazuna-yaml.md)** —
    1 つの Kubernetes クラスタに kustomize で書いた add-on を 1 つ入れるところまでを、
    `tazuna.yaml` の最初の 1 枚から `tazuna apply` までひと通り通します。
+2. **[環境ごとに設定を切り替える](./environments.md)** —
+   `{{ .Environment }}` テンプレート変数と `spec.environments` を使い、1 つの
+   `tazuna.yaml` を staging / production など複数クラスタに安全に使い回します。
 
 これ以降のテーマ（複数 manifest の順序付け、`--tags` による絞り込み、
 State の確認、GenesisSecret、CI 連携など）は、ここで作った `tazuna.yaml` を

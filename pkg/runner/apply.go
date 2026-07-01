@@ -18,6 +18,7 @@ import (
 	"github.com/pepabo/tazuna/pkg/resource"
 	"github.com/pepabo/tazuna/pkg/state"
 	"github.com/pepabo/tazuna/pkg/testplugin"
+	"github.com/pepabo/tazuna/pkg/tmpl"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -491,9 +492,16 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 					return errors.Wrapf(err, "failed to open include file: %s", includePath)
 				}
 
+				// tazuna.yaml 本体と同じく include ファイルも Go template として描画し、
+				// {{ .Environment }} を解決してからパースする。
+				rendered, err := tmpl.Render(includePath, includeData, tmpl.Data{Environment: t.environment})
+				if err != nil {
+					return errors.WithStack(err)
+				}
+
 				// includeファイルをパースして完全なTazuna構造として読み込む
 				var includeTazuna v1.Tazuna
-				if err := yaml.Unmarshal(includeData, &includeTazuna); err != nil {
+				if err := yaml.Unmarshal(rendered, &includeTazuna); err != nil {
 					return errors.Wrapf(err, "failed to parse include file: %s", includePath)
 				}
 

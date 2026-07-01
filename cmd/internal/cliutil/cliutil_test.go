@@ -45,7 +45,7 @@ spec:
 		t.Fatalf("write tmp file: %v", err)
 	}
 
-	got, err := cliutil.LoadTazunaYAML(path)
+	got, err := cliutil.LoadTazunaYAML(path, "")
 	if err != nil {
 		t.Fatalf("LoadTazunaYAML returned error: %v", err)
 	}
@@ -59,8 +59,113 @@ spec:
 
 func TestLoadTazunaYAML_MissingFile(t *testing.T) {
 	t.Parallel()
-	if _, err := cliutil.LoadTazunaYAML(filepath.Join(t.TempDir(), "does-not-exist.yaml")); err == nil {
+	if _, err := cliutil.LoadTazunaYAML(filepath.Join(t.TempDir(), "does-not-exist.yaml"), ""); err == nil {
 		t.Fatal("expected error for missing file, got nil")
+	}
+}
+
+// TestLoadTazunaYAML_TemplateEnvironment は tazuna.yaml が Go template として描画され、
+// {{ .Environment }} が -e の値で置換されることを確認します。
+func TestLoadTazunaYAML_TemplateEnvironment(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "tazuna.yaml")
+	yaml := `apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  context_matches:
+    - ^{{ .Environment }}-.*$
+  manifests: []
+`
+	if err := os.WriteFile(path, []byte(yaml), 0o644); err != nil {
+		t.Fatalf("write tmp file: %v", err)
+	}
+
+	got, err := cliutil.LoadTazunaYAML(path, "staging")
+	if err != nil {
+		t.Fatalf("LoadTazunaYAML returned error: %v", err)
+	}
+	if len(got.Spec.ContextMatches) != 1 || got.Spec.ContextMatches[0] != "^staging-.*$" {
+		t.Errorf("context_matches = %v, want [^staging-.*$]", got.Spec.ContextMatches)
+	}
+}
+
+func TestResolveContextMatches(t *testing.T) {
+	t.Parallel()
+
+	spec := v1.TazunaSpec{
+		ContextMatches:   []string{"^root-.*$"},
+		ContextMatchMode: v1.ContextMatchModeAND,
+		Environments: map[string]v1.EnvironmentSpec{
+			"prod": {
+				ContextMatches:   []string{"^prod-.*$"},
+				ContextMatchMode: v1.ContextMatchModeOR,
+			},
+			"staging": {
+				// context_match_mode を省略 → root の mode を継承する
+				ContextMatches: []string{"^staging-.*$"},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		environment string
+		wantMatches []string
+		wantMode    v1.ContextMatchMode
+		expectErr   bool
+	}{
+		{
+			name:        "empty environment uses root",
+			environment: "",
+			wantMatches: []string{"^root-.*$"},
+			wantMode:    v1.ContextMatchModeAND,
+		},
+		{
+			name:        "named environment overrides root",
+			environment: "prod",
+			wantMatches: []string{"^prod-.*$"},
+			wantMode:    v1.ContextMatchModeOR,
+		},
+		{
+			name:        "environment inherits root mode when empty",
+			environment: "staging",
+			wantMatches: []string{"^staging-.*$"},
+			wantMode:    v1.ContextMatchModeAND,
+		},
+		{
+			name:        "unknown environment is an error",
+			environment: "does-not-exist",
+			expectErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			matches, mode, err := cliutil.ResolveContextMatches(spec, tt.environment)
+			if tt.expectErr {
+				if err == nil {
+					t.Fatal("expected error but got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if mode != tt.wantMode {
+				t.Errorf("mode = %q, want %q", mode, tt.wantMode)
+			}
+			if len(matches) != len(tt.wantMatches) {
+				t.Fatalf("matches = %v, want %v", matches, tt.wantMatches)
+			}
+			for i := range matches {
+				if matches[i] != tt.wantMatches[i] {
+					t.Errorf("matches[%d] = %q, want %q", i, matches[i], tt.wantMatches[i])
+				}
+			}
+		})
 	}
 }
 
@@ -126,14 +231,14 @@ spec:
 	}
 
 	// デフォルト("dev")ではゲートをスキップするのでエラーにならない。
-	if _, err := cliutil.LoadTazunaYAML(path); err != nil {
+	if _, err := cliutil.LoadTazunaYAML(path, ""); err != nil {
 		t.Fatalf("LoadTazunaYAML with dev version returned error: %v", err)
 	}
 
 	// 実行バージョンを下回る値にすると LoadTazunaYAML がエラーになる。
 	cliutil.SetCurrentVersion("1.0.0")
 	t.Cleanup(func() { cliutil.SetCurrentVersion("dev") })
-	if _, err := cliutil.LoadTazunaYAML(path); err == nil {
+	if _, err := cliutil.LoadTazunaYAML(path, ""); err == nil {
 		t.Fatal("expected error when running version is below minimum, got nil")
 	}
 }

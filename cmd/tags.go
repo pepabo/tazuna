@@ -29,7 +29,7 @@ Examples:
 			return errors.WithStack(err)
 		}
 
-		tazuna, err := cliutil.LoadTazunaYAML(path)
+		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
 		if err != nil {
 			return err
 		}
@@ -39,7 +39,7 @@ Examples:
 		}
 
 		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
-		r := runner.NewTazunaRunner(logger, nil, nil)
+		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
 
 		tags, err := r.ListTags(cmd.Context(), tazuna, path)
 		if err != nil {

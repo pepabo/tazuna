@@ -74,6 +74,12 @@ func ValidateTazunaSpec(spec *v1.TazunaSpec, basePath string) error {
 		return errors.Errorf("context_match_mode must be 'or' or 'and', got: %s", spec.ContextMatchMode)
 	}
 
+	for name, env := range spec.Environments {
+		if err := ValidateEnvironment(name, &env); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
 	for i, manifest := range spec.Manifests {
 		if err := ValidateManifest(&manifest, basePath); err != nil {
 			return errors.Wrapf(err, "validation failed for manifest[%d]", i)
@@ -82,6 +88,32 @@ func ValidateTazunaSpec(spec *v1.TazunaSpec, basePath string) error {
 
 	if err := ValidateProviders(spec.Providers); err != nil {
 		return errors.WithStack(err)
+	}
+
+	return nil
+}
+
+// ValidateEnvironment は spec.environments.<name> の 1 エントリをバリデーションします。
+// 環境名が空でないこと、context_matches が有効な正規表現であること、
+// context_match_mode が 'or' / 'and' のいずれかであることを検証します。
+func ValidateEnvironment(name string, env *v1.EnvironmentSpec) error {
+	if name == "" {
+		return errors.New("environment name must not be empty")
+	}
+	if env == nil {
+		return errors.Errorf("environment %q is nil", name)
+	}
+
+	for i, pattern := range env.ContextMatches {
+		if _, err := regexp.Compile(pattern); err != nil {
+			return errors.Errorf("environments[%q].context_matches[%d] is not a valid regex: %s", name, i, err)
+		}
+	}
+
+	if env.ContextMatchMode != "" &&
+		env.ContextMatchMode != v1.ContextMatchModeOR &&
+		env.ContextMatchMode != v1.ContextMatchModeAND {
+		return errors.Errorf("environments[%q].context_match_mode must be 'or' or 'and', got: %s", name, env.ContextMatchMode)
 	}
 
 	return nil
