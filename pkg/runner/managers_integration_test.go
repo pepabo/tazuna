@@ -13,7 +13,7 @@ import (
 func TestSetupManagers_RegistersORAS(t *testing.T) {
 	t.Parallel()
 	k8sClient := fake.NewClientBuilder().Build()
-	managers, err := setupManagers(k8sClient, nil, orasmanager.PullOptions{}, nil, "")
+	managers, err := setupManagers(k8sClient, nil, orasmanager.PullOptions{}, nil, "", "")
 	if err != nil {
 		t.Fatalf("setupManagers returned error: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestSetupManagers_RegistersORAS(t *testing.T) {
 func TestSetupManagers_RegistersAllExpectedTypes(t *testing.T) {
 	t.Parallel()
 	k8sClient := fake.NewClientBuilder().Build()
-	managers, err := setupManagers(k8sClient, nil, orasmanager.PullOptions{}, nil, "")
+	managers, err := setupManagers(k8sClient, nil, orasmanager.PullOptions{}, nil, "", "")
 	if err != nil {
 		t.Fatalf("setupManagers returned error: %v", err)
 	}
