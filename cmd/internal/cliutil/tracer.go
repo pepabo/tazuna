@@ -2,6 +2,7 @@ package cliutil
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/cockroachdb/errors"
@@ -83,6 +84,15 @@ func SetupTracer(ctx context.Context, endpoint string, insecure bool) (trace.Tra
 		return tp.Shutdown(ctx)
 	}
 	return tp, shutdown, nil
+}
+
+// ShutdownTracerWithWarn は shutdown を実行し、失敗した場合は警告ログを出す。
+// span flush の失敗でコマンド自体を失敗させたくない defer 用途に使う
+// (完全に無音で握り潰すと flush 失敗に気づけないため警告は残す)。
+func ShutdownTracerWithWarn(shutdown func(context.Context) error) {
+	if err := shutdown(context.Background()); err != nil {
+		slog.Warn("failed to flush traces on tracer shutdown", "error", err.Error())
+	}
 }
 
 // SetupTracerFromCmd reads the persistent --otlp-endpoint and --otlp-insecure
