@@ -3,10 +3,37 @@ package op
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 )
+
+func TestWrapOpCLIError_IncludesStderr(t *testing.T) {
+	t.Parallel()
+
+	// 本物の *exec.ExitError (Stderr 付き) を得るため、stderr に書いて失敗する
+	// コマンドを実行する
+	_, err := exec.Command("sh", "-c", "echo '[ERROR] vault not found' >&2; exit 1").Output()
+	if err == nil {
+		t.Fatal("expected command to fail")
+	}
+
+	wrapped := wrapOpCLIError(err)
+	if !strings.Contains(wrapped.Error(), "vault not found") {
+		t.Errorf("wrapped error does not include stderr: %v", wrapped)
+	}
+}
+
+func TestWrapOpCLIError_NonExitError(t *testing.T) {
+	t.Parallel()
+
+	wrapped := wrapOpCLIError(fmt.Errorf("some error"))
+	if !strings.Contains(wrapped.Error(), "op CLI failed") {
+		t.Errorf("unexpected wrapped error: %v", wrapped)
+	}
+}
 
 func TestCommandClient_GetVaultItem_Memoized(t *testing.T) {
 	t.Parallel()
