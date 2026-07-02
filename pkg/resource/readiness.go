@@ -30,9 +30,10 @@ func IsReady(obj *unstructured.Unstructured) (bool, error) {
 
 // IsDeploymentReady は Deployment が Ready かどうかを確認します。
 func IsDeploymentReady(u *unstructured.Unstructured) (bool, error) {
-	// spec.replicas が 0 の場合は即座に ready とみなす
-	specReplicas, _, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
-	if specReplicas == 0 {
+	// spec.replicas が明示的に 0 の場合は即座に ready とみなす。
+	// フィールド欠落 (デフォルト 1) を 0 と同一視しないよう found を確認する。
+	specReplicas, found, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
+	if found && specReplicas == 0 {
 		return true, nil
 	}
 
@@ -45,9 +46,10 @@ func IsDeploymentReady(u *unstructured.Unstructured) (bool, error) {
 
 // IsStatefulSetReady は StatefulSet が Ready かどうかを確認します。
 func IsStatefulSetReady(u *unstructured.Unstructured) (bool, error) {
-	// spec.replicas が 0 の場合は即座に ready とみなす
-	specReplicas, _, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
-	if specReplicas == 0 {
+	// spec.replicas が明示的に 0 の場合は即座に ready とみなす。
+	// フィールド欠落 (デフォルト 1) を 0 と同一視しないよう found を確認する。
+	specReplicas, found, _ := unstructured.NestedInt64(u.Object, "spec", "replicas")
+	if found && specReplicas == 0 {
 		return true, nil
 	}
 
