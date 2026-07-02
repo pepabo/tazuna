@@ -525,11 +525,24 @@ func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef stri
 	return chartPath, nil
 }
 
+// helmfileTemplateFuncs は helmfile render 用の sprig FuncMap を返します。
+// env / expandenv は除外します。ORAS 経由で取得したリモートアーティファクト内の
+// helmfile もこの経路で render されるため、悪意ある（または改竄された）テンプレートが
+// `{{ env "AWS_SECRET_ACCESS_KEY" }}` のように実行者の環境変数を窃取して
+// マニフェストへ焼き込むのを防ぐ。環境変数を参照したい場合は helmfile vars の
+// `from: env` を明示的に使うこと。
+func helmfileTemplateFuncs() template.FuncMap {
+	funcs := sprig.TxtFuncMap()
+	delete(funcs, "env")
+	delete(funcs, "expandenv")
+	return funcs
+}
+
 // renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
 // helmfile 互換のため .StateValues と .Values の双方から vars を参照できるようにします。
 func renderHelmfileTemplate(path string, raw []byte, vars map[string]any) ([]byte, error) {
 	tmpl, err := template.New(filepath.Base(path)).
-		Funcs(sprig.TxtFuncMap()).
+		Funcs(helmfileTemplateFuncs()).
 		Option("missingkey=zero").
 		Parse(string(raw))
 	if err != nil {

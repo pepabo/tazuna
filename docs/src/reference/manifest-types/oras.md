@@ -109,6 +109,15 @@ docker 側へフォールバックします（意図しない anonymous 化を�
 同一プロセス内では token のキャッシュが共有されるため、同じ registry に対する複数の
 pull で token を取り直すコストはかかりません。
 
+### セキュリティ上の注意
+
+ORAS artifact 内の helmfile / kustomize は **ローカルに書いた manifest と同じ信頼
+レベルで実行されます**。artifact のレンダリング結果はそのままクラスタへ適用される
+ため、信頼できる registry のみを参照し、tag ではなく **digest でのピン留め**
+(`@sha256:...`) を推奨します。なお helmfile テンプレートでは sprig の
+`env` / `expandenv` が無効化されており、artifact 側のテンプレートが tazuna
+実行者の環境変数を読み取ることはできません。
+
 ## 例
 
 tag 指定 + helmfile 委譲:
