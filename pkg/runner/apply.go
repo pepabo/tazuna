@@ -505,12 +505,12 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 	baseDir := filepath.Dir(tazunaYAMLPath)
 	var expandedManifests []v1.Manifest
 
-	for _, manifest := range tazuna.Spec.Manifests {
-		if len(manifest.Includes) > 0 {
+	for _, m := range tazuna.Spec.Manifests {
+		if len(m.Includes) > 0 {
 			// includesが指定されている場合、includeファイルを展開する
-			t.logger.DebugContext(ctx, "expanding includes", slog.Int("includeFiles", len(manifest.Includes)))
+			t.logger.DebugContext(ctx, "expanding includes", slog.Int("includeFiles", len(m.Includes)))
 
-			for _, include := range manifest.Includes {
+			for _, include := range m.Includes {
 				includePath := filepath.Join(baseDir, include.Path)
 
 				// includeファイルを読み込み
@@ -544,7 +544,7 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 			}
 		} else {
 			// includesが指定されていない場合、そのままマニフェストを追加
-			expandedManifests = append(expandedManifests, manifest)
+			expandedManifests = append(expandedManifests, m)
 		}
 	}
 

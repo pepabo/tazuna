@@ -7,7 +7,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/pepabo/tazuna/cmd/internal/cliutil"
-	tazunacontext "github.com/pepabo/tazuna/pkg/context"
+	"github.com/pepabo/tazuna/pkg/kubecontext"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/prompt"
 	"github.com/pepabo/tazuna/pkg/runner"
@@ -76,7 +76,7 @@ Examples:
 			return err
 		}
 		if len(contextMatches) > 0 {
-			if err := tazunacontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
+			if err := kubecontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
 				return err
 			}
 		}
