@@ -172,3 +172,17 @@ items:
 	assert.Equal(t, "test-namespace", objects[1].GetNamespace())
 	assert.Equal(t, "test-configmap2", objects[1].GetName())
 }
+
+func TestConvertManifestsToObjects_InvalidMetadata(t *testing.T) {
+	t.Parallel()
+
+	// metadata がマッピングでない不正なドキュメントで panic せずエラーを返す
+	_, err := ConvertManifestsToObjects([]byte(`
+apiVersion: v1
+kind: ConfigMap
+metadata: "not-a-mapping"
+`), "test-namespace")
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "metadata must be a mapping")
+}
