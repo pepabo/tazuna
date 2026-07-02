@@ -2,6 +2,8 @@ package manager_test
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"testing"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -10,6 +12,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+// TestHelmfile_Build_RejectsEnvFunction は helmfile テンプレートで sprig の
+// env / expandenv が使えないことを確認する。ORAS 経由で取得したリモートの
+// helmfile が実行者の環境変数を窃取するのを防ぐためのガード。
+func TestHelmfile_Build_RejectsEnvFunction(t *testing.T) {
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-env/helmfile.yaml.gotmpl",
+	}
+
+	_, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), `function "env" not defined`)
+}
 
 func TestHelmfile_ConstructHelmfileVars_OpFieldLookup(t *testing.T) {
 	client := fake.NewFakeClient()
