@@ -41,6 +41,19 @@ func TestMatchContext_OR(t *testing.T) {
 			expectErr:   true,
 			errContains: "does not match any of context_matches patterns",
 		},
+		{
+			name:      "anchorless pattern matches whole name",
+			context:   "prod",
+			patterns:  []string{"prod"},
+			expectErr: false,
+		},
+		{
+			name:        "anchorless pattern does not partially match",
+			context:     "preprod-cluster",
+			patterns:    []string{"prod"},
+			expectErr:   true,
+			errContains: "does not match any of context_matches patterns",
+		},
 	}
 
 	for _, tt := range tests {
