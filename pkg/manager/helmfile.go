@@ -51,6 +51,9 @@ import (
 type Helmfile struct {
 	client   client.Client
 	opClient op.Client
+	// environment は -e/--environment フラグの値。helmfile.yaml テンプレートの
+	// {{ .Environment.Name }} に注入される。空文字なら "default"。
+	environment string
 }
 
 // Destroy implements Manager.
@@ -230,7 +233,14 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 var _ Manager = &Helmfile{}
 
 func NewHelmfile(client client.Client, opClient op.Client) *Helmfile {
-	return &Helmfile{client, opClient}
+	return &Helmfile{client: client, opClient: opClient}
+}
+
+// WithEnvironment は -e/--environment フラグの値を設定します。
+// helmfile.yaml テンプレートの {{ .Environment.Name }} に反映されます。
+func (h *Helmfile) WithEnvironment(environment string) *Helmfile {
+	h.environment = environment
+	return h
 }
 
 // Build implements Manager.
@@ -286,7 +296,7 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	}
 
 	// helmfile.yaml 自体を Go テンプレートとして解釈する (.StateValues / .Values)。
-	rendered, err := renderHelmfileTemplate(helmfilePath, raw, vars)
+	rendered, err := renderHelmfileTemplate(helmfilePath, raw, vars, h.environment)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to render helmfile template %s", helmfilePath)
 	}
@@ -466,7 +476,9 @@ func helmfileTemplateFuncs() template.FuncMap {
 
 // renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
 // helmfile 互換のため .StateValues と .Values の双方から vars を参照できるようにします。
-func renderHelmfileTemplate(path string, raw []byte, vars map[string]any) ([]byte, error) {
+// environment は {{ .Environment.Name }} に注入される。空文字なら helmfile の
+// 慣習に合わせて "default" になる。
+func renderHelmfileTemplate(path string, raw []byte, vars map[string]any, environment string) ([]byte, error) {
 	tmpl, err := template.New(filepath.Base(path)).
 		Funcs(helmfileTemplateFuncs()).
 		Option("missingkey=zero").
@@ -475,10 +487,13 @@ func renderHelmfileTemplate(path string, raw []byte, vars map[string]any) ([]byt
 		return nil, errors.WithStack(err)
 	}
 
+	if environment == "" {
+		environment = "default"
+	}
 	data := map[string]any{
 		"StateValues": vars,
 		"Values":      vars,
-		"Environment": map[string]any{"Name": "default"},
+		"Environment": map[string]any{"Name": environment},
 	}
 
 	var buf bytes.Buffer

@@ -57,6 +57,8 @@ releases:
 helmfile 本体の以下の機能は **未対応** です: environments / リモート chart /
 `bases` / release 間の `needs` / `hooks` / `--selector` 等。これらが必要な場合は
 helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md) などで取り込んでください。
+ただしテンプレート内の `{{ .Environment.Name }}` は参照でき、tazuna の
+`-e/--environment` フラグの値が注入されます (未指定時は `"default"`)。
 
 ## 固有フィールド
 
