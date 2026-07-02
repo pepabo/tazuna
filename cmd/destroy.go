@@ -82,7 +82,13 @@ Examples:
 			}
 		}
 
-		if v, err := cmd.Flags().GetBool("force"); err == nil && !v {
+		// 確認ガード: GetBool のエラーを握り潰すと確認プロンプトなしで destroy に
+		// 進む fail-open になるため、エラーは必ず返す。
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		if !force {
 			ok, err := prompt.YesORNo(os.Stdin, "!!! All resources managed by Tazuna will be deleted !!!\nAre you sure you want to delete them?")
 			if err != nil {
 				return errors.WithStack(err)
