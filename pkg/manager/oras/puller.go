@@ -162,9 +162,14 @@ func (p *cachingPuller) Pull(ctx context.Context, logger *slog.Logger, spec v1.M
 	if err != nil {
 		return PullResult{}, fmt.Errorf("oras pull: fetch manifest: %w", err)
 	}
+	// リモートレジストリの場合、Close しないと HTTP response body がリークする
 	manifestBytes, err := content.ReadAll(manifestRC, manifestDesc)
+	closeErr := manifestRC.Close()
 	if err != nil {
 		return PullResult{}, fmt.Errorf("oras pull: read manifest: %w", err)
+	}
+	if closeErr != nil {
+		return PullResult{}, fmt.Errorf("oras pull: close manifest reader: %w", closeErr)
 	}
 
 	var manifest ocispec.Manifest
