@@ -52,9 +52,17 @@ func TestBuildUnstructuredFromStateKey_InvalidKey(t *testing.T) {
 func TestGetGitCommitHash(t *testing.T) {
 	t.Parallel()
 
-	hash := getGitCommitHash(context.Background())
+	hash := getGitCommitHash(context.Background(), "")
 	// gitリポジトリ内で実行されている場合、40文字のhex文字列が返る
 	if hash != "" {
 		assert.Len(t, hash, 40)
 	}
+}
+
+func TestGetGitCommitHash_NonGitDir(t *testing.T) {
+	t.Parallel()
+
+	// git リポジトリでないディレクトリではベストエフォートで空文字列を返す
+	hash := getGitCommitHash(context.Background(), t.TempDir())
+	assert.Empty(t, hash)
 }

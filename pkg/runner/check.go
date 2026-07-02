@@ -17,7 +17,7 @@ func (t *TazunaRunner) Check(ctx context.Context, tazuna *v1.Tazuna, tazunaYAMLP
 		return err
 	}
 
-	allManifests := validator.CollectAllManifests(tazuna.Spec.Manifests)
+	allManifests := tazuna.Spec.Manifests
 
 	t.logger.DebugContext(ctx, "validating manifest names", slog.Int("totalManifests", len(allManifests)))
 
@@ -48,7 +48,7 @@ func (t *TazunaRunner) CheckAndFix(ctx context.Context, tazuna *v1.Tazuna, tazun
 		return err
 	}
 
-	allManifests := validator.CollectAllManifests(expanded.Spec.Manifests)
+	allManifests := expanded.Spec.Manifests
 
 	t.logger.DebugContext(ctx, "validating manifest names after fix", slog.Int("totalManifests", len(allManifests)))
 

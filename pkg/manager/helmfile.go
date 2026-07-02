@@ -17,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Masterminds/sprig/v3"
@@ -308,13 +309,51 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 
 	baseDir := filepath.Dir(helmfilePath)
 
-	var docs [][]byte
-	for i := range spec.Releases {
-		rel := spec.Releases[i]
-		out, err := h.renderRelease(baseDir, &rel, m.Helmfile)
+	// ExtraValueFiles は release 間で共通のため、release ごとに再読込せず
+	// 一度だけ読み込んで共有する。
+	extraValues := map[string]any{}
+	for _, vf := range m.Helmfile.ExtraValueFiles {
+		merged, err := loadValueFile(baseDir, vf)
 		if err != nil {
-			return "", errors.Wrapf(err, "failed to render release %q", rel.Name)
+			return "", errors.Wrapf(err, "failed to load extra value file %s", vf)
 		}
+		extraValues = mergeMaps(extraValues, merged)
+	}
+
+	// OCI chart 用の registry client は release ごとに生成せず共有する。
+	var registryClient *registry.Client
+	for i := range spec.Releases {
+		if registry.IsOCI(spec.Releases[i].Chart) {
+			rc, err := registry.NewClient()
+			if err != nil {
+				return "", errors.Wrap(err, "failed to create helm registry client")
+			}
+			registryClient = rc
+			break
+		}
+	}
+
+	// release は互いに独立に render できるため errgroup で並列化する。
+	results := make([]string, len(spec.Releases))
+	g, _ := errgroup.WithContext(ctx)
+	g.SetLimit(releaseRenderConcurrency)
+	for i := range spec.Releases {
+		g.Go(func() error {
+			rel := &spec.Releases[i]
+			out, err := h.renderRelease(baseDir, rel, m.Helmfile, extraValues, registryClient)
+			if err != nil {
+				return errors.Wrapf(err, "failed to render release %q", rel.Name)
+			}
+			results[i] = out
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return "", err
+	}
+
+	var docs [][]byte
+	for _, out := range results {
 		if trimmed := bytes.TrimSpace([]byte(out)); len(trimmed) > 0 {
 			docs = append(docs, trimmed)
 		}
@@ -322,6 +361,10 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 
 	return string(bytes.Join(docs, []byte("\n---\n"))), nil
 }
+
+// releaseRenderConcurrency は release render の並列数。helm の in-memory render は
+// CPU バウンドのため控えめな値にする。
+const releaseRenderConcurrency = 4
 
 // defaultHelmfileNames は m.Path がディレクトリのときに探索する helmfile ファイル名の
 // 優先順位。helmfile 本体の既定 (gotmpl 優先) に倣う。
@@ -367,7 +410,9 @@ type helmfileRelease struct {
 }
 
 // renderRelease は 1 release を helm の ClientOnly + DryRun install で render します。
-func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile) (string, error) {
+// extraValues は release 間で共有される追加 values (読み込み済み)、registryClient は
+// OCI chart 用の共有 client (OCI chart がない場合は nil)。
+func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile, extraValues map[string]any, registryClient *registry.Client) (string, error) {
 	if rel.Chart == "" {
 		return "", errors.Errorf("release %q has no chart", rel.Name)
 	}
@@ -379,9 +424,8 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	// あるため、actionCfg.RegistryClient を NewInstall 前に設定しておく
 	// (action.NewInstall が ChartPathOptions.registryClient にコピーする)。
 	if registry.IsOCI(rel.Chart) {
-		registryClient, err := registry.NewClient()
-		if err != nil {
-			return "", errors.Wrap(err, "failed to create helm registry client")
+		if registryClient == nil {
+			return "", errors.Errorf("release %q references an OCI chart but no registry client is available", rel.Name)
 		}
 		actionCfg.RegistryClient = registryClient
 	}
@@ -415,7 +459,8 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	}
 
 	// release の values (ファイル + インライン) を順にマージし、最後に
-	// extraValueFiles を上書きとしてマージする (helmfile の --values 相当)。
+	// extraValues (extraValueFiles の読み込み済みマージ結果) を上書きとして
+	// マージする (helmfile の --values 相当)。
 	values := map[string]any{}
 	for _, v := range rel.Values {
 		merged, err := loadValueEntry(baseDir, v)
@@ -424,13 +469,7 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 		}
 		values = mergeMaps(values, merged)
 	}
-	for _, vf := range cfg.ExtraValueFiles {
-		merged, err := loadValueFile(baseDir, vf)
-		if err != nil {
-			return "", errors.Wrapf(err, "failed to load extra value file %s", vf)
-		}
-		values = mergeMaps(values, merged)
-	}
+	values = mergeMaps(values, extraValues)
 
 	release, err := inst.Run(chrt, values)
 	if err != nil {

@@ -17,8 +17,7 @@ import (
 // といった実害があるため、strict=true (--sync または dependsOn 使用時) は
 // エラーに昇格する。それ以外は移行期間のため警告に留める。
 func (t *TazunaRunner) validateManifestNames(ctx context.Context, tazuna v1.Tazuna, strict bool) error {
-	allManifests := validator.CollectAllManifests(tazuna.Spec.Manifests)
-	err := validator.ValidateManifestNames(allManifests)
+	err := validator.ValidateManifestNames(tazuna.Spec.Manifests)
 	if err == nil {
 		return nil
 	}
