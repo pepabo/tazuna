@@ -84,12 +84,14 @@ func NewTazunaRunner(
 // "default-op" provider が opClient ありの場合に自動登録されるため、tazuna.yaml で
 // providers を一切宣言しなくても従来挙動 (1Password のみ利用可能) が保たれる。
 // providers の baseDir は registry 構築時に envfile path 解決のために使う。
+// environment は helmfile manager の {{ .Environment.Name }} に伝播される。
 func setupManagers(
 	k8sClient client.Client,
 	opClient op.Client,
 	orasOpts orasmanager.PullOptions,
 	providers []v1.ProviderConfig,
 	providersBaseDir string,
+	environment string,
 ) (map[string]manager.Manager, error) {
 	registry, err := buildProviderRegistry(opClient, providers, providersBaseDir)
 	if err != nil {
@@ -100,7 +102,7 @@ func setupManagers(
 	m[string(v1.ManifestTypeGenesisSecret)] = manager.NewGenesisSecret(k8sClient, registry)
 	kustomizeManager := manager.NewKustomize(k8sClient)
 	m[string(v1.ManifestTypeKustomize)] = kustomizeManager
-	helmfileManager := manager.NewHelmfile(k8sClient, opClient)
+	helmfileManager := manager.NewHelmfile(k8sClient, opClient).WithEnvironment(environment)
 	m[string(v1.ManifestTypeHelmfile)] = helmfileManager
 	// ORAS managerはartifact pull後にhelmfile/kustomize managerへ委譲する
 	m[string(v1.ManifestTypeORAS)] = newORASManager(helmfileManager, kustomizeManager, orasOpts)

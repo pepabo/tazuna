@@ -13,6 +13,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+// TestHelmfile_Build_EnvironmentName は tazuna の -e/--environment が
+// helmfile テンプレートの {{ .Environment.Name }} に伝播することを確認する。
+func TestHelmfile_Build_EnvironmentName(t *testing.T) {
+	client := fake.NewFakeClient()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-environment/helmfile.yaml.gotmpl",
+	}
+
+	t.Run("environment is propagated", func(t *testing.T) {
+		m := manager.NewHelmfile(client, nil).WithEnvironment("production")
+		out, err := m.Build(context.Background(), logger, manifest)
+		assert.NoError(t, err)
+		assert.Contains(t, out, `label-from-static: "production"`)
+	})
+
+	t.Run("empty environment falls back to default", func(t *testing.T) {
+		m := manager.NewHelmfile(client, nil)
+		out, err := m.Build(context.Background(), logger, manifest)
+		assert.NoError(t, err)
+		assert.Contains(t, out, `label-from-static: "default"`)
+	})
+}
+
 // TestHelmfile_Build_RejectsEnvFunction は helmfile テンプレートで sprig の
 // env / expandenv が使えないことを確認する。ORAS 経由で取得したリモートの
 // helmfile が実行者の環境変数を窃取するのを防ぐためのガード。
