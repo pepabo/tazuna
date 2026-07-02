@@ -391,6 +391,15 @@ func (t *TazunaRunner) SyncManifest(
 			}
 		}
 
+		// helmfile の wait: true は mgr.Apply() 経由 (通常 apply) でしか実行されない
+		// ため、--sync でも同じ挙動になるようここで尊重する。差分ゼロの場合は
+		// リソースが既に適用済みであるため待機しない。
+		if wait, timeoutSeconds := manifestWaitConfig(m); wait {
+			if err := resource.WaitForReady(ctx, t.k8sClient, t.logger, objects, timeoutSeconds); err != nil {
+				return errors.Wrapf(err, "failed to wait for resources of manifest %q", m.Name)
+			}
+		}
+
 		// ステートを保存（atomicモード時は後でまとめて保存）
 		newStateData := &state.StateData{
 			Metadata: state.StateMetadata{
@@ -428,6 +437,22 @@ func (t *TazunaRunner) SyncManifest(
 	}
 
 	return nil
+}
+
+// manifestWaitConfig は manifest に wait 設定があるかどうかとタイムアウト秒数を返す。
+// helmfile manifest 本体と、ORAS の helmfile delegate の双方に対応する。
+func manifestWaitConfig(m v1.Manifest) (bool, int) {
+	switch m.Type {
+	case v1.ManifestTypeHelmfile:
+		if m.Helmfile != nil {
+			return m.Helmfile.Wait, m.Helmfile.TimeoutSeconds
+		}
+	case v1.ManifestTypeORAS:
+		if m.ORAS != nil && m.ORAS.Delegate.Type == v1.ORASDelegateTypeHelmfile && m.ORAS.Delegate.Helmfile != nil {
+			return m.ORAS.Delegate.Helmfile.Wait, m.ORAS.Delegate.Helmfile.TimeoutSeconds
+		}
+	}
+	return false, 0
 }
 
 // saveManifestState は適用済みmanifestのstateをConfigMapに保存する。

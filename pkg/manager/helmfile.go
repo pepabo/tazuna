@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"text/template"
-	"time"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/hint"
@@ -27,7 +26,6 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
 
@@ -111,88 +109,12 @@ func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest
 
 	// Wait が設定されている場合は、リソースが Ready になるまで待つ
 	if m.Helmfile.Wait {
-		if err := h.waitForResources(ctx, logger, objects, m.Helmfile.TimeoutSeconds); err != nil {
+		if err := resource.WaitForReady(ctx, h.client, logger, objects, m.Helmfile.TimeoutSeconds); err != nil {
 			return nil, errors.WithStack(err)
 		}
 	}
 
 	return objects, nil
-}
-
-// waitForResources は、指定されたリソースが Ready になるまで待機します
-func (h *Helmfile) waitForResources(ctx context.Context, logger *slog.Logger, objects []client.Object, timeout int) error {
-	// デフォルトのタイムアウトは 5 分
-	if timeout == 0 {
-		timeout = 300
-	}
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-	defer cancel()
-
-	for _, obj := range objects {
-		if err := h.waitForResource(timeoutCtx, logger, obj); err != nil {
-			return errors.Wrapf(err, "failed to wait for resource %s/%s", obj.GetNamespace(), obj.GetName())
-		}
-	}
-
-	return nil
-}
-
-// waitForResource は、単一のリソースが Ready になるまで待機します
-func (h *Helmfile) waitForResource(ctx context.Context, logger *slog.Logger, obj client.Object) error {
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	logger.InfoContext(ctx, "waiting for resource to be ready",
-		slog.String("namespace", obj.GetNamespace()),
-		slog.String("name", obj.GetName()),
-		slog.String("kind", gvk.Kind))
-
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return errors.Errorf("timeout waiting for %s %s/%s to be ready", gvk.Kind, obj.GetNamespace(), obj.GetName())
-		case <-ticker.C:
-			ready, err := h.isResourceReady(ctx, obj)
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			if ready {
-				logger.InfoContext(ctx, "resource is ready",
-					slog.String("namespace", obj.GetNamespace()),
-					slog.String("name", obj.GetName()),
-					slog.String("kind", gvk.Kind))
-				return nil
-			}
-		}
-	}
-}
-
-// isResourceReady は、リソースが Ready 状態かどうかを確認します。
-// 判定ロジック自体は pkg/resource に切り出されており、本メソッドはライブ取得した
-// unstructured を resource.IsReady に委譲する薄いラッパーです。
-func (h *Helmfile) isResourceReady(ctx context.Context, obj client.Object) (bool, error) {
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	key := client.ObjectKey{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-	}
-
-	// リソースの最新状態を unstructured で取得
-	// manifest.ConvertManifestsToObjects が *unstructured.Unstructured を返すため、
-	// client.Get の結果も unstructured で受け取る
-	current := &unstructured.Unstructured{}
-	current.SetGroupVersionKind(gvk)
-	if err := h.client.Get(ctx, key, current); err != nil {
-		if client.IgnoreNotFound(err) == nil {
-			// リソースがまだ存在しない場合は ready ではない
-			return false, nil
-		}
-		return false, errors.WithStack(err)
-	}
-
-	return resource.IsReady(current)
 }
 
 func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (map[string]any, error) {
