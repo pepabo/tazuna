@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +42,11 @@ func decodeStateKey(k string) string {
 // ConfigMapStateStore はConfigMapベースのStateStore実装
 type ConfigMapStateStore struct {
 	client client.Client
+
+	// nsMu / nsEnsured はSaveごとのnamespace存在確認GETを同一store内で
+	// 1回に抑えるためのフィールド。失敗時はキャッシュせず次回も再試行する。
+	nsMu      sync.Mutex
+	nsEnsured bool
 }
 
 // NewConfigMapStateStore はConfigMapStateStoreを生成する
@@ -79,7 +85,7 @@ func (s *ConfigMapStateStore) Get(ctx context.Context, manifestName string) (*St
 // state ConfigMap は tazuna namespace 配下に作成されるため、書き込み前に
 // namespace の存在を保証する (呼び出し側での ensure 忘れを防ぐ)。
 func (s *ConfigMapStateStore) Save(ctx context.Context, manifestName string, data *StateData) error {
-	if err := EnsureNamespace(ctx, s.client); err != nil {
+	if err := s.ensureNamespaceOnce(ctx); err != nil {
 		return errors.Wrapf(err, "failed to ensure %s namespace before saving state", TazunaNamespace)
 	}
 
@@ -119,6 +125,21 @@ func (s *ConfigMapStateStore) Save(ctx context.Context, manifestName string, dat
 	}
 
 	return errors.Wrapf(err, "failed to get state ConfigMap %s for save", cmName)
+}
+
+// ensureNamespaceOnce は同一store内でnamespaceのensureを成功するまで1回に抑える。
+// 成功した後はGETを発行しない。失敗はキャッシュしないため次回のSaveで再試行される。
+func (s *ConfigMapStateStore) ensureNamespaceOnce(ctx context.Context) error {
+	s.nsMu.Lock()
+	defer s.nsMu.Unlock()
+	if s.nsEnsured {
+		return nil
+	}
+	if err := EnsureNamespace(ctx, s.client); err != nil {
+		return err
+	}
+	s.nsEnsured = true
+	return nil
 }
 
 // parseConfigMapData はConfigMapのdataフィールドからStateDataをパースする
