@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,7 +37,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		defer func() { _ = shutdownTracer(context.Background()) }()
+		defer cliutil.ShutdownTracerWithWarn(shutdownTracer)
 
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {

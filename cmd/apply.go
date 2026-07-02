@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"path/filepath"
 
 	"github.com/cockroachdb/errors"
@@ -56,7 +55,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		defer func() { _ = shutdownTracer(context.Background()) }()
+		defer cliutil.ShutdownTracerWithWarn(shutdownTracer)
 
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
