@@ -3,6 +3,7 @@ package manifest
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
@@ -64,7 +65,9 @@ func ConvertManifestsToObjects(
 					if !ok {
 						continue
 					}
-					setNamespaceIfEmpty(itemData, namespace)
+					if err := setNamespaceIfEmpty(itemData, namespace); err != nil {
+						return nil, err
+					}
 					obj := unstructured.Unstructured{Object: itemData}
 					objects = append(objects, &obj)
 				}
@@ -72,7 +75,9 @@ func ConvertManifestsToObjects(
 			}
 		}
 
-		setNamespaceIfEmpty(data, namespace)
+		if err := setNamespaceIfEmpty(data, namespace); err != nil {
+			return nil, err
+		}
 		obj := unstructured.Unstructured{Object: data}
 		objects = append(objects, &obj)
 	}
@@ -94,12 +99,22 @@ func ConvertManifestsToObjects(
 }
 
 // setNamespaceIfEmptyは、metadata.namespaceが未設定の場合にnamespaceを設定します。
+// metadata がマッピングでない不正なドキュメント (例: `metadata: "foo"`) は
+// panic せずエラーを返します。
 // NOTE: falcoなどのマニフェストでは、roleなどmetadata.namespaceが空のものが存在する場合がある
-func setNamespaceIfEmpty(data map[string]any, namespace string) {
+// NOTE: このパッケージは discovery 情報を持たないため、cluster-scoped リソースの
+// 判定はできない。cluster-scoped リソースにも namespace が設定されうるが、
+// kube-apiserver 側で無視されるため適用結果には影響しない。
+func setNamespaceIfEmpty(data map[string]any, namespace string) error {
 	if data["metadata"] == nil {
 		data["metadata"] = map[string]any{}
 	}
-	if data["metadata"].(map[string]any)["namespace"] == nil && namespace != "" {
-		data["metadata"].(map[string]any)["namespace"] = namespace
+	metadata, ok := data["metadata"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("metadata must be a mapping, got %T (kind: %v)", data["metadata"], data["kind"])
 	}
+	if metadata["namespace"] == nil && namespace != "" {
+		metadata["namespace"] = namespace
+	}
+	return nil
 }
