@@ -22,6 +22,11 @@ func (t *TazunaRunner) Destroy(
 		return errors.WithStack(err)
 	}
 
+	// include展開後にもvalidationを実行し、include先ファイルのtypo等を検知する
+	if err := validateExpandedSpec(&tazuna, tazunaYAMLPath); err != nil {
+		return err
+	}
+
 	// manifest nameのバリデーション警告（移行期間のためエラーにはしない）
 	t.warnManifestNameValidation(ctx, tazuna)
 

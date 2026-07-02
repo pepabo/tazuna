@@ -198,6 +198,10 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 			if !found {
 				return nil, errors.Errorf("helmfile var %s has From op but op field %s not found in item %s", k, v.Op.Field, v.Op.Item)
 			}
+		default:
+			// typo等の未知のFromを黙って無視するとvarが欠落したまま
+			// missingkey=zeroでゼロ値レンダリングされるため、明示的にエラーにする
+			return nil, errors.Errorf("helmfile var %s has unsupported From field: %s, supported From is 'env/static/op'", k, v.From)
 		}
 	}
 

@@ -92,6 +92,22 @@ func TestHelmfile_ConstructHelmfileVars_OpFieldLookup(t *testing.T) {
 		assert.Contains(t, err.Error(), "op field no-such-field not found in item test-item")
 	})
 
+	t.Run("unknown from returns error", func(t *testing.T) {
+		manifest := v1.Manifest{
+			Path: "testdata/helmfile/helmfile.yaml",
+			Helmfile: &v1.ManifestHelmfile{
+				Vars: map[string]v1.HelmFileVar{
+					"myVar": {
+						From: "sttic", // typo of "static"
+					},
+				},
+			},
+		}
+		_, err := m.ConstructHelmfileVars(context.Background(), &manifest)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unsupported From field: sttic")
+	})
+
 	t.Run("field with empty value is allowed", func(t *testing.T) {
 		// field が存在して値が空文字のケースは「not found」とは区別して許容する
 		manifest := opVarManifest("id", "empty-field")
