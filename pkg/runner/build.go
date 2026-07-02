@@ -42,19 +42,19 @@ func (t *TazunaRunner) Build(
 
 	var allOutputs []string
 
-	for _, manifest := range tazuna.Spec.Manifests {
+	for _, m := range tazuna.Spec.Manifests {
 		// タグフィルタリングのチェック
-		if !matchesTags(manifest, t.tags) {
-			t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(manifest.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+		if !matchesTags(m, t.tags) {
+			t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
 			continue
 		}
 
-		manager, ok := managers[string(manifest.Type)]
+		mgr, ok := managers[string(m.Type)]
 		if !ok {
-			return "", fmt.Errorf("manager %s not found", manifest.Type)
+			return "", fmt.Errorf("manager %s not found", m.Type)
 		}
 
-		out, err := manager.Build(ctx, t.logger, manifest)
+		out, err := mgr.Build(ctx, t.logger, m)
 		if err != nil {
 			return "", errors.WithStack(err)
 		}
