@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -127,59 +128,39 @@ func (t *TazunaRunner) StateDrift(
 
 // detectDriftForManifest は保存ステートの各エントリについてライブクラスタを取得し、
 // 不一致または存在しないものを DriftEntry として返す。
+// ライブ GET は read-only なので errgroup で並列化する。
 func (t *TazunaRunner) detectDriftForManifest(
 	ctx context.Context,
 	manifestName string,
 	stateData *state.StateData,
 ) ([]DriftEntry, error) {
-	var entries []DriftEntry
+	keys := make([]string, 0, len(stateData.Entries))
+	for k := range stateData.Entries {
+		keys = append(keys, k)
+	}
 
-	for keyStr, stored := range stateData.Entries {
-		parsed, err := state.ParseStateKey(keyStr)
-		if err != nil {
-			t.logger.WarnContext(ctx, "failed to parse state key, skipping",
-				slog.String("manifest", manifestName),
-				slog.String("key", keyStr),
-				slog.String("error", err.Error()))
-			continue
-		}
-
-		obj := &unstructured.Unstructured{}
-		obj.SetGroupVersionKind(schema.GroupVersionKind{
-			Group:   parsed.Group,
-			Version: parsed.Version,
-			Kind:    parsed.Kind,
-		})
-		obj.SetName(parsed.Name)
-		if parsed.Namespace != "" {
-			obj.SetNamespace(parsed.Namespace)
-		}
-
-		getErr := t.k8sClient.Get(ctx, client.ObjectKey{Namespace: parsed.Namespace, Name: parsed.Name}, obj)
-		if getErr != nil {
-			if apierrors.IsNotFound(getErr) {
-				entries = append(entries, DriftEntry{
-					Key:        keyStr,
-					DriftType:  DriftTypeMissing,
-					StoredHash: stored.ContentHash,
-				})
-				continue
+	results := make([]*DriftEntry, len(keys))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(liveGetConcurrency)
+	for i, keyStr := range keys {
+		stored := stateData.Entries[keyStr]
+		g.Go(func() error {
+			entry, err := t.detectDriftForEntry(gctx, manifestName, keyStr, stored)
+			if err != nil {
+				return err
 			}
-			return nil, errors.Wrapf(getErr, "failed to get live resource for %s", keyStr)
-		}
+			results[i] = entry
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
 
-		liveHash, err := state.ComputeContentHash(obj)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to compute live content hash for %s", keyStr)
-		}
-
-		if liveHash != stored.ContentHash {
-			entries = append(entries, DriftEntry{
-				Key:        keyStr,
-				DriftType:  DriftTypeDrifted,
-				StoredHash: stored.ContentHash,
-				LiveHash:   liveHash,
-			})
+	var entries []DriftEntry
+	for _, entry := range results {
+		if entry != nil {
+			entries = append(entries, *entry)
 		}
 	}
 
@@ -192,6 +173,63 @@ func (t *TazunaRunner) detectDriftForManifest(
 	})
 
 	return entries, nil
+}
+
+// detectDriftForEntry は 1 つの state エントリについてライブクラスタと比較する。
+// drift がなければ nil を返す。
+func (t *TazunaRunner) detectDriftForEntry(
+	ctx context.Context,
+	manifestName string,
+	keyStr string,
+	stored state.StateEntry,
+) (*DriftEntry, error) {
+	parsed, err := state.ParseStateKey(keyStr)
+	if err != nil {
+		t.logger.WarnContext(ctx, "failed to parse state key, skipping",
+			slog.String("manifest", manifestName),
+			slog.String("key", keyStr),
+			slog.String("error", err.Error()))
+		return nil, nil
+	}
+
+	obj := &unstructured.Unstructured{}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   parsed.Group,
+		Version: parsed.Version,
+		Kind:    parsed.Kind,
+	})
+	obj.SetName(parsed.Name)
+	if parsed.Namespace != "" {
+		obj.SetNamespace(parsed.Namespace)
+	}
+
+	getErr := t.k8sClient.Get(ctx, client.ObjectKey{Namespace: parsed.Namespace, Name: parsed.Name}, obj)
+	if getErr != nil {
+		if apierrors.IsNotFound(getErr) {
+			return &DriftEntry{
+				Key:        keyStr,
+				DriftType:  DriftTypeMissing,
+				StoredHash: stored.ContentHash,
+			}, nil
+		}
+		return nil, errors.Wrapf(getErr, "failed to get live resource for %s", keyStr)
+	}
+
+	liveHash, err := state.ComputeContentHash(obj)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to compute live content hash for %s", keyStr)
+	}
+
+	if liveHash != stored.ContentHash {
+		return &DriftEntry{
+			Key:        keyStr,
+			DriftType:  DriftTypeDrifted,
+			StoredHash: stored.ContentHash,
+			LiveHash:   liveHash,
+		}, nil
+	}
+
+	return nil, nil
 }
 
 // driftTypeOrder は DriftType の安定ソート順を返す
