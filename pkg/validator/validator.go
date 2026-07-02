@@ -149,7 +149,9 @@ func ValidateManifest(manifest *v1.Manifest, basePath string) error {
 	case v1.ManifestTypeKustomize:
 		// Kustomize特有のバリデーションがあればここに追加
 	case v1.ManifestTypeGenesisSecret:
-		// GenesisSecret特有のバリデーションがあればここに追加
+		if err := ValidateManifestGenesisSecret(manifest, basePath); err != nil {
+			return errors.Wrapf(err, "genesissecret validation failed for manifest %s", manifest.Path)
+		}
 	case v1.ManifestTypeORAS:
 		if err := ValidateManifestORAS(manifest.ORAS); err != nil {
 			return errors.Wrapf(err, "oras validation failed for manifest %s", manifest.Path)
