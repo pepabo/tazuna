@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -112,6 +114,60 @@ func TestCheck_WithIncludes(t *testing.T) {
 	}, "testdata/include/tazuna.yaml")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid characters")
+}
+
+func TestCheckAndFix_AssignsNames(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	r := runner.NewTazunaRunner(logger, nil, nil)
+
+	tazuna := &v1.Tazuna{
+		Spec: v1.TazunaSpec{
+			Manifests: []v1.Manifest{
+				{Type: "kustomize", Path: "./monitoring"},
+			},
+		},
+	}
+	err := r.CheckAndFix(context.Background(), tazuna, "testdata/ok/tazuna.yaml")
+	assert.NoError(t, err)
+	assert.Equal(t, "kustomize-monitoring", tazuna.Spec.Manifests[0].Name)
+}
+
+func TestCheckAndFix_PreservesIncludes(t *testing.T) {
+	t.Parallel()
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+	r := runner.NewTazunaRunner(logger, nil, nil)
+
+	dir := t.TempDir()
+	err := os.WriteFile(filepath.Join(dir, "include.yaml"), []byte(`apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+    - name: "kustomize-app"
+      path: "kustomize"
+      type: "kustomize"
+`), 0o644)
+	assert.NoError(t, err)
+
+	tazuna := &v1.Tazuna{
+		Spec: v1.TazunaSpec{
+			Manifests: []v1.Manifest{
+				{
+					Includes: []v1.IncludeFile{
+						{Path: "include.yaml"},
+					},
+				},
+			},
+		},
+	}
+	err = r.CheckAndFix(context.Background(), tazuna, filepath.Join(dir, "tazuna.yaml"))
+	assert.NoError(t, err)
+
+	// CheckAndFix が書き戻し対象の構造体を include 展開で破壊しないことを確認
+	assert.Len(t, tazuna.Spec.Manifests, 1)
+	assert.Len(t, tazuna.Spec.Manifests[0].Includes, 1)
+	// includes を持つ manifest には名前を自動付与しない
+	assert.Empty(t, tazuna.Spec.Manifests[0].Name)
 }
 
 func TestCheck_WithIncludesValid(t *testing.T) {

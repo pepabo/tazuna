@@ -10,9 +10,14 @@ import (
 
 // FixManifestNames はname未設定のmanifestに対してtypeとpathから名前を自動付与する。
 // 既存の名前との重複を回避するためにサフィックスを付与する。
+// includesを持つmanifestは展開時にinclude先のmanifest群へ置換されるため、
+// 名前付与の対象外とする。
 func FixManifestNames(manifests []v1.Manifest) {
 	usedNames := collectExistingNames(manifests)
 	for i := range manifests {
+		if len(manifests[i].Includes) > 0 {
+			continue
+		}
 		if manifests[i].Name == "" {
 			name := generateName(manifests[i])
 			name = ensureUnique(name, usedNames)
