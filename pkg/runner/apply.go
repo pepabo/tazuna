@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -158,17 +157,10 @@ func (t *TazunaRunner) ApplyToCluster(
 		errCh := make(chan error, len(layer))
 		var wg sync.WaitGroup
 		for _, m := range layer {
-			if len(t.tags) > 0 {
-				// タグが指定されている場合は、tagsに含まれるもののみを適用する
-				found := false
-				for _, tag := range t.tags {
-					found = found || slices.Contains(m.Tags, tag)
-				}
-
-				if !found {
-					t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
-					continue
-				}
+			// タグが指定されている場合は、tagsに含まれるもののみを適用する
+			if !matchesTags(m, t.tags) {
+				t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+				continue
 			}
 
 			wg.Add(1)

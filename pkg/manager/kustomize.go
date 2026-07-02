@@ -52,6 +52,38 @@ func NewKustomize(client client.Client) *Kustomize {
 	return &Kustomize{client}
 }
 
+// renderKustomizeYAML は kustomize build を実行して YAML を返す。
+// Apply / Destroy / Build で共通利用するレンダリング部分。
+func renderKustomizeYAML(path string) ([]byte, error) {
+	fs := filesys.MakeFsOnDisk()
+	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
+	resourceMap, err := kustomizer.Run(fs, path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	out, err := resourceMap.AsYaml()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return out, nil
+}
+
+// renderObjects は kustomize build の結果を client.Object 群に変換する。
+// m.Kustomize の nil デフォルト補完もここで行う。
+func (k *Kustomize) renderObjects(m *v1.Manifest) ([]client.Object, error) {
+	out, err := renderKustomizeYAML(m.Path)
+	if err != nil {
+		return nil, err
+	}
+
+	if m.Kustomize == nil {
+		m.Kustomize = &v1.ManifestKustomize{}
+	}
+
+	return manifest.ConvertManifestsToObjects(out, m.Kustomize.DefaultNamespace)
+}
+
 // Destroy implements Manager.
 func (k *Kustomize) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manifest) (retErr error) {
 	ctx, span := otel.Tracer(managerTracerName).Start(ctx, "Kustomize.Destroy",
@@ -61,23 +93,7 @@ func (k *Kustomize) Destroy(ctx context.Context, logger *slog.Logger, m v1.Manif
 		span.End()
 	}()
 
-	fs := filesys.MakeFsOnDisk()
-	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-	resourceMap, err := kustomizer.Run(fs, m.Path)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	out, err := resourceMap.AsYaml()
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	if m.Kustomize == nil {
-		m.Kustomize = &v1.ManifestKustomize{}
-	}
-
-	objects, err := manifest.ConvertManifestsToObjects(out, m.Kustomize.DefaultNamespace)
+	objects, err := k.renderObjects(&m)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -102,23 +118,7 @@ func (k *Kustomize) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifes
 		span.End()
 	}()
 
-	fs := filesys.MakeFsOnDisk()
-	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-	resourceMap, err := kustomizer.Run(fs, m.Path)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	out, err := resourceMap.AsYaml()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	if m.Kustomize == nil {
-		m.Kustomize = &v1.ManifestKustomize{}
-	}
-
-	objects, err = manifest.ConvertManifestsToObjects(out, m.Kustomize.DefaultNamespace)
+	objects, err := k.renderObjects(&m)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -146,14 +146,7 @@ func (k *Kustomize) Build(ctx context.Context, logger *slog.Logger, m v1.Manifes
 		span.End()
 	}()
 
-	fs := filesys.MakeFsOnDisk()
-	kustomizer := krusty.MakeKustomizer(krusty.MakeDefaultOptions())
-	resourceMap, err := kustomizer.Run(fs, m.Path)
-	if err != nil {
-		return "", errors.WithStack(err)
-	}
-
-	raw, err := resourceMap.AsYaml()
+	raw, err := renderKustomizeYAML(m.Path)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}

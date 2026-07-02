@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -45,16 +44,9 @@ func (t *TazunaRunner) Build(
 
 	for _, manifest := range tazuna.Spec.Manifests {
 		// タグフィルタリングのチェック
-		if len(t.tags) > 0 {
-			found := false
-			for _, tag := range t.tags {
-				found = found || slices.Contains(manifest.Tags, tag)
-			}
-
-			if !found {
-				t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(manifest.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
-				continue
-			}
+		if !matchesTags(manifest, t.tags) {
+			t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(manifest.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+			continue
 		}
 
 		manager, ok := managers[string(manifest.Type)]
