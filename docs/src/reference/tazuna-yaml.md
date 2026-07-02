@@ -192,7 +192,7 @@ $ tazuna apply -e production
 
 | フィールド      | 型                                | 必須 | デフォルト | 説明 |
 |-----------------|-----------------------------------|------|------------|------|
-| `name`          | string                            | ◯    | -          | Manifest 識別子。`^[a-zA-Z0-9_-]+$` にマッチする必要があり、`includes` 展開後の全 Manifest 間でユニーク。`_metadata` は予約済みで使用不可。 |
+| `name`          | string                            | ◯    | -          | Manifest 識別子。小文字英数と `-` のみ (DNS-1123 相当、`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`、最大 240 文字) で、`includes` 展開後の全 Manifest 間でユニーク。`_metadata` は予約済みで使用不可。 |
 | `description`   | string                            | -    | `""`       | 人間向けの説明。挙動には影響しません。 |
 | `type`          | string                            | △ (※) | -        | `kustomize` / `helmfile` / `genesissecret` / `oras` のいずれか。 |
 | `path`          | string                            | △ (※) | -        | `tazuna.yaml` 自身の置かれているディレクトリ起点の相対パス。 |
@@ -211,13 +211,17 @@ $ tazuna apply -e production
 ### `name`
 
 - 必須。
-- 使える文字種は `^[a-zA-Z0-9_-]+$`。
+- 使える文字種は小文字英数と `-` のみ (`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`、最大 240 文字)。
+  Manifest 名は state ConfigMap 名 (`tazuna-state-<name>`) にそのまま使われるため、
+  Kubernetes リソース名として不正になる大文字や `_` は使えません。
 - `_metadata` は内部利用のため予約されており、Manifest 名としては使えません。
 - `includes` 展開後の全 Manifest 間で **一意** である必要があります。
   重複していると `tazuna check` でエラーになります。
 
-`tazuna check` では `name` のバリデーションは **エラー** として扱いますが、`tazuna apply`
-/ `build` / `destroy` では移行期間として **警告ログのみ** が出る挙動になっています。
+`tazuna check` では `name` のバリデーションは **エラー** として扱います。
+`tazuna apply` / `build` / `destroy` では移行期間として **警告ログのみ** が出る挙動に
+なっていますが、**`--sync` または `dependsOn` を使う場合はエラー** になります
+(不正な名前のまま state を書くと誤 prune や誤った依存解決につながるため)。
 新規導入時は `tazuna check` で先に通しておくのが安全です。
 
 ### `path`

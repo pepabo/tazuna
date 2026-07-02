@@ -113,6 +113,8 @@ func TestExtractDirName(t *testing.T) {
 		{"", ""},
 		{"monitoring", "monitoring"},
 		{"./path.with.dots", "path-with-dots"},
+		{"./MyApp", "myapp"},
+		{"./snake_case_dir", "snake-case-dir"},
 	}
 
 	for _, tt := range tests {

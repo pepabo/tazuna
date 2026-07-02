@@ -24,7 +24,7 @@ var checkCmd = &cobra.Command{
 
 Checks:
   - spec.manifests[].name is required
-  - spec.manifests[].name uses only allowed characters (alphanumeric, underscore, hyphen)
+  - spec.manifests[].name uses only allowed characters (lowercase alphanumeric and hyphen, DNS-1123 style)
   - spec.manifests[].name uniqueness
   - spec.manifests[].name is not a reserved word
 
