@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"path/filepath"
 
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -35,6 +36,17 @@ func (t *TazunaRunner) validateManifestNames(ctx context.Context, tazuna v1.Tazu
 func (t *TazunaRunner) warnManifestNameValidation(ctx context.Context, tazuna v1.Tazuna) {
 	// 戻り値は strict=false のとき常に nil。
 	_ = t.validateManifestNames(ctx, tazuna, false)
+}
+
+// validateExpandedSpec はinclude展開後のTazunaSpecに対してValidateTazunaSpecを実行する。
+// cmd層のバリデーションはinclude展開前にしか走らないため、include先ファイルの
+// helmfile vars のtypo等はここで検知される。
+func validateExpandedSpec(tazuna *v1.Tazuna, tazunaYAMLPath string) error {
+	basePath := filepath.Dir(tazunaYAMLPath)
+	if err := validator.ValidateTazunaSpec(&tazuna.Spec, basePath); err != nil {
+		return errors.Wrap(err, "validation failed after include expansion")
+	}
+	return nil
 }
 
 // anyDependsOn はいずれかのmanifestがdependsOnを使っているかを返す。

@@ -75,6 +75,11 @@ func (t *TazunaRunner) Apply(
 		return errors.WithStack(err)
 	}
 
+	// include展開後にもvalidationを実行し、include先ファイルのtypo等を検知する
+	if err := validateExpandedSpec(&tazuna, tazunaYAMLPath); err != nil {
+		return err
+	}
+
 	// manifest nameのバリデーション。--sync / dependsOn 使用時は不正名が
 	// state の上書きや誤 prune・誤った依存解決につながるためエラーに昇格する。
 	// それ以外は移行期間のため警告に留める。
