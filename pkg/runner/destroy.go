@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -55,16 +54,9 @@ func (t *TazunaRunner) DestroyResourcesOnCluster(
 	}
 	for _, m := range tazuna.Spec.Manifests {
 		// タグフィルタリングのチェック
-		if len(t.tags) > 0 {
-			found := false
-			for _, tag := range t.tags {
-				found = found || slices.Contains(m.Tags, tag)
-			}
-
-			if !found {
-				t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
-				continue
-			}
+		if !matchesTags(m, t.tags) {
+			t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+			continue
 		}
 
 		mgr, ok := managers[string(m.Type)]
