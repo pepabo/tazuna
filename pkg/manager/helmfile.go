@@ -256,21 +256,24 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 				return nil, errors.Wrapf(err, "failed to get vault item %s from %s", v.Op.Item, v.Op.Vault)
 			}
 
+			found := false
 			for _, field := range item.Fields {
 				if v.Op.Key == v1.HelmFileVarOpKeyID {
 					if field.ID == v.Op.Field {
 						vars[k] = field.Value
+						found = true
 						break
 					}
 				} else if v.Op.Key == v1.HelmFileVarOpKeyLabel {
 					if field.Label == v.Op.Field {
 						vars[k] = field.Value
+						found = true
 						break
 					}
 				}
 			}
 
-			if vars[k] == "" {
+			if !found {
 				return nil, errors.Errorf("helmfile var %s has From op but op field %s not found in item %s", k, v.Op.Field, v.Op.Item)
 			}
 		}
