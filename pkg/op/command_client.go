@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/cockroachdb/errors"
@@ -31,11 +32,28 @@ type itemCacheEntry struct {
 }
 
 // run は op CLI を実行して stdout を返す。
+// 失敗時は op CLI が stderr に出した原因メッセージをエラーに含める。
 func (c *CommandClient) run(ctx context.Context, cmds []string) ([]byte, error) {
 	if c.execCommand != nil {
 		return c.execCommand(ctx, cmds)
 	}
-	return exec.CommandContext(ctx, cmds[0], cmds[1:]...).Output()
+	out, err := exec.CommandContext(ctx, cmds[0], cmds[1:]...).Output()
+	if err != nil {
+		return nil, wrapOpCLIError(err)
+	}
+	return out, nil
+}
+
+// wrapOpCLIError は op CLI の実行エラーに stderr の内容を付与する。
+// .Output() のエラーをそのまま返すとユーザーには "exit status 1" しか
+// 見えないため、*exec.ExitError.Stderr に入っている op CLI の原因
+// メッセージを取り出してエラーに含める。
+func wrapOpCLIError(err error) error {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+		return errors.Wrapf(err, "op CLI failed: %s", strings.TrimSpace(string(exitErr.Stderr)))
+	}
+	return errors.Wrap(err, "op CLI failed")
 }
 
 // GetVault implements Client.
@@ -59,7 +77,7 @@ func (c *CommandClient) GetVault(ctx context.Context, vaultName string) (Vault, 
 
 	vault := Vault{}
 	if err := json.Unmarshal(out, &vault); err != nil {
-		return Vault{}, err
+		return Vault{}, errors.Wrapf(err, "failed to parse op CLI output for vault %s", vaultName)
 	}
 
 	return vault, nil
@@ -128,7 +146,7 @@ func (c *CommandClient) fetchVaultItem(ctx context.Context, vaultName string, it
 
 	item := Item{}
 	if err := json.Unmarshal(out, &item); err != nil {
-		return Item{}, err
+		return Item{}, errors.Wrapf(err, "failed to parse op CLI output for item %s in vault %s", itemName, vaultName)
 	}
 
 	return item, nil
@@ -155,7 +173,7 @@ func (c *CommandClient) ListVaultItems(ctx context.Context, vaultName string) ([
 
 	var items []Item
 	if err := json.Unmarshal(out, &items); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to parse op CLI output for items in vault %s", vaultName)
 	}
 
 	return items, nil
