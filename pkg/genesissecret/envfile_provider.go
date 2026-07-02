@@ -2,6 +2,7 @@ package genesissecret
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -53,7 +54,7 @@ var _ SecretProvider = &EnvFileProvider{}
 func parseEnvFile(data []byte) (map[string]string, error) {
 	out := map[string]string{}
 
-	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	lineNo := 0
 	for scanner.Scan() {
 		lineNo++

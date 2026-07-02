@@ -32,11 +32,15 @@ func buildUnstructuredFromStateKey(keyStr string) (*unstructured.Unstructured, e
 	return obj, nil
 }
 
-// getGitCommitHash は現在のgit commit hashを取得する。
+// getGitCommitHash は dir が属する git リポジトリの commit hash を取得する。
 // state metadata に「どのコミット時点で同期されたか」を残すために使う。
+// cwd 基準だと tazuna.yaml が別リポジトリにある場合に無関係なコミットハッシュが
+// 記録されるため、tazuna.yaml のディレクトリを渡すこと (空文字なら cwd)。
 // 取得に失敗した場合は空文字列を返す (state 保存はベストエフォート)。
-func getGitCommitHash(ctx context.Context) string {
-	out, err := exec.CommandContext(ctx, "git", "rev-parse", "HEAD").Output()
+func getGitCommitHash(ctx context.Context, dir string) string {
+	cmd := exec.CommandContext(ctx, "git", "rev-parse", "HEAD")
+	cmd.Dir = dir
+	out, err := cmd.Output()
 	if err != nil {
 		return ""
 	}

@@ -135,7 +135,9 @@ func (t *TazunaRunner) ApplyToCluster(
 	// state ConfigMapはtazuna namespace配下に作成されるが、namespaceの存在保証は
 	// ConfigMapStateStore.Save 側で行うため、ここでは明示的に ensure しない。
 	store := state.NewConfigMapStateStore(t.k8sClient)
-	gitCommit := getGitCommitHash(ctx)
+	// providersBaseDir は tazuna.yaml のディレクトリ (Apply の入口で設定済み)。
+	// cwd ではなく tazuna.yaml 側のリポジトリの commit hash を記録する。
+	gitCommit := getGitCommitHash(ctx, t.providersBaseDir)
 
 	// sync モードでは atomic 時の state を一旦バッファし、全 manifest 処理後に保存する。
 	// DAG モードでは同一層内のマニフェストが並列に書き込むため mutex で保護する。

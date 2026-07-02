@@ -66,10 +66,3 @@ func validateSingleManifestName(manifest *v1.Manifest, index int) error {
 
 	return nil
 }
-
-// CollectAllManifests はinclude展開後の全manifestをフラットなスライスとして収集する。
-func CollectAllManifests(manifests []v1.Manifest) []v1.Manifest {
-	var result []v1.Manifest
-	result = append(result, manifests...)
-	return result
-}

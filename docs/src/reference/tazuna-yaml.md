@@ -344,6 +344,9 @@ spec:
   さらに `includes` を持っていても展開されません。
 - include 先で定義された Manifest の `name` も含めて、最終的な全 Manifest 間で
   `name` がユニークである必要があります。
+- include 先ファイル内の Manifest の `path` は **ルートの `tazuna.yaml` の
+  ディレクトリ起点** で解決されます。include ファイル自身のディレクトリ起点
+  ではない点に注意してください。
 
 ## Manifest type 別フィールド
 

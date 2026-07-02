@@ -29,6 +29,10 @@ func (t *TazunaRunner) ListTags(ctx context.Context, tazuna *v1.Tazuna, tazunaYA
 
 	tags := make(map[string][]string)
 	for _, m := range tazuna.Spec.Manifests {
+		// 名前未設定の manifest を "" として出力に混ぜない
+		if m.Name == "" {
+			continue
+		}
 		for _, tag := range m.Tags {
 			if _, exists := tags[tag]; !exists {
 				tags[tag] = []string{}

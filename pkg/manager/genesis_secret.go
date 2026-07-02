@@ -278,20 +278,8 @@ func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.M
 		return errors.WithStack(err)
 	}
 
-	provider, err := g.resolveProvider(genesisSecret.Spec.Provider)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	items := map[string]string{}
-	for _, s := range genesisSecret.Spec.Secrets {
-		i, err := provider.Fetch(ctx, s)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		items = merge(items, i)
-	}
-
+	// Destroy は Secret を削除するだけで秘匿情報の値を必要としないため、
+	// provider からの Fetch は行わない (1Password 不達時でも destroy できる)。
 	for _, o := range genesisSecret.Spec.Outputs {
 		kind, err := classifyOutput(o)
 		if err != nil {

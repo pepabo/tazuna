@@ -96,7 +96,7 @@ func init() {
 	vaultCompletionFn := func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		vault := op.NewVaultCommandBuilder().WithList(op.NewVaultListCommandBuilder())
 		vaultListCommand := op.NewCommandBuilder().WithJSONFormat().WithVault(vault).Build()
-		out, err := exec.Command(vaultListCommand[0], vaultListCommand[1:]...).Output()
+		out, err := exec.CommandContext(cmd.Context(), vaultListCommand[0], vaultListCommand[1:]...).Output()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}

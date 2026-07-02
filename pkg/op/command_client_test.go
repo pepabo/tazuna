@@ -15,7 +15,7 @@ func TestWrapOpCLIError_IncludesStderr(t *testing.T) {
 
 	// 本物の *exec.ExitError (Stderr 付き) を得るため、stderr に書いて失敗する
 	// コマンドを実行する
-	_, err := exec.Command("sh", "-c", "echo '[ERROR] vault not found' >&2; exit 1").Output()
+	_, err := exec.CommandContext(context.Background(), "sh", "-c", "echo '[ERROR] vault not found' >&2; exit 1").Output()
 	if err == nil {
 		t.Fatal("expected command to fail")
 	}
