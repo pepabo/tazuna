@@ -75,8 +75,13 @@ func (t *TazunaRunner) Apply(
 		return errors.WithStack(err)
 	}
 
-	// manifest nameのバリデーション警告（移行期間のためエラーにはしない）
-	t.warnManifestNameValidation(ctx, tazuna)
+	// manifest nameのバリデーション。--sync / dependsOn 使用時は不正名が
+	// state の上書きや誤 prune・誤った依存解決につながるためエラーに昇格する。
+	// それ以外は移行期間のため警告に留める。
+	strictNames := t.applyOpts.Sync || anyDependsOn(tazuna.Spec.Manifests)
+	if err := t.validateManifestNames(ctx, tazuna, strictNames); err != nil {
+		return err
+	}
 
 	// tazuna.yamlはマニフェストパスがtazuna.yamlからの相対パスで渡されているので、
 	// それをcwdからのパスに変換する

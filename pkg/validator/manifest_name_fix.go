@@ -66,12 +66,18 @@ func extractDirName(path string) string {
 		return ""
 	}
 
-	// 名前に使えない文字を置換
+	// 名前に使えない文字を置換する。manifest名はDNS-1123相当
+	// (小文字英数と '-') に制限されるため、大文字は小文字化し
+	// '_' などその他の文字は '-' に置き換える。
 	name := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-':
 			return r
+		case r >= 'A' && r <= 'Z':
+			return r + ('a' - 'A')
+		default:
+			return '-'
 		}
-		return '-'
 	}, base)
 
 	return strings.Trim(name, "-")
