@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -16,45 +17,61 @@ import (
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/op"
-	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 )
 
+// SecretToGenesisSecretOptions は SecretToGenesisSecret の挙動を制御するオプション群。
+// CLI フラグのパースは cmd 層で行い、この構造体に詰めて渡す。
+type SecretToGenesisSecretOptions struct {
+	// LabelSelector は対象 Secret を絞り込むラベルセレクタ (key1=value1,key2=value2)。
+	// 空文字なら絞り込まない。
+	LabelSelector string
+	// NameRegex は対象 Secret 名を絞り込む正規表現。空文字なら絞り込まない。
+	NameRegex string
+	// Vault は保存先の 1Password vault 名。
+	Vault string
+	// Namespace は Secret を列挙する Kubernetes namespace。空文字なら全 namespace。
+	Namespace string
+	// DryRun が true のとき、1Password への保存とファイル書き出しを行わない。
+	DryRun bool
+	// DumpDir は生成した GenesisSecret YAML の出力先ディレクトリ。
+	DumpDir string
+	// Note は 1Password item に付与するメモ。
+	Note string
+	// OpHost は GenesisSecret の uri に使う 1Password ホスト名。
+	OpHost string
+}
+
 // SecretToGenesisSecret は、KubernetesのSecretを1Passwordに保存し、
-// 対応するGenesisSecretのYAMLを生成する
+// 対応するGenesisSecretのYAMLを生成する。
+// dry-run 時の出力は w に書き出される。
 func (t *TazunaRunner) SecretToGenesisSecret(
 	ctx context.Context,
-	cmd *cobra.Command,
-	opClient op.Client,
-	k8sClient client.Client,
-	opHost string,
+	opts SecretToGenesisSecretOptions,
+	w io.Writer,
 ) error {
 	// STEP1: KubernetesのsecretListを取得する
 	// STEP2: 取得したsecretListを元に、1PasswordのItemCreateCommandsを実行する
 	// STEP3: 作成した1PasswordのItemに対応する、GenesisSecretのYAMLを生成する
 
-	secretList := corev1.SecretList{}
-	listOptions, err := secretToGenesisSecretCommandToSecretListOptions(cmd)
+	listOptions, err := secretListOptionsFromOptions(opts)
 	if err != nil {
 		return err
 	}
 
 	// STEP1
 	t.logger.InfoContext(ctx, "list secrets")
-	if err := k8sClient.List(ctx, &secretList, listOptions...); err != nil {
+	secretList := corev1.SecretList{}
+	if err := t.k8sClient.List(ctx, &secretList, listOptions...); err != nil {
 		return errors.WithStack(err)
 	}
 	t.logger.DebugContext(ctx, "successfully listed secrets", slog.Int("count", len(secretList.Items)))
 
-	nameRegex, err := cmd.Flags().GetString("name-regex")
-	if err != nil {
-		return errors.WithStack(err)
-	}
 	var nameRegexp *regexp.Regexp
-	if nameRegex != "" {
-		nameRegexp, err = regexp.Compile(nameRegex)
+	if opts.NameRegex != "" {
+		nameRegexp, err = regexp.Compile(opts.NameRegex)
 		if err != nil {
 			return errors.WithStack(err)
 		}
@@ -63,35 +80,23 @@ func (t *TazunaRunner) SecretToGenesisSecret(
 	secrets := filterSecretsWithRegex(secretList.Items, nameRegexp)
 	t.logger.DebugContext(ctx, "filtered by name-regex", slog.Int("count", len(secrets)))
 
-	vaultName, err := cmd.Flags().GetString("vault")
-	if err != nil {
-		return errors.WithStack(err)
-	}
+	vaultName := opts.Vault
 
 	// STEP2
 	t.logger.InfoContext(ctx, "get the vault that the vault items stores", slog.String("vault", vaultName))
-	vault, err := opClient.GetVault(ctx, vaultName)
+	vault, err := t.opClient.GetVault(ctx, vaultName)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
-	dryRun, err := cmd.Flags().GetBool("dry-run")
+	items := secretsToVaultItems(secrets, &vault, opts.Note)
+
+	commands, err := itemCreateCommandsFromItems(ctx, items, vaultName, opts.DryRun)
 	if err != nil {
 		return errors.WithStack(err)
 	}
 
-	note, err := cmd.Flags().GetString("note")
-	if err != nil {
-		return errors.WithStack(err)
-	}
-	items := secretsToVaultItems(secrets, &vault, note)
-
-	commands, err := itemCreateCommandsFromItems(items, vaultName, dryRun)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	existItems, err := opClient.ListVaultItems(ctx, vaultName)
+	existItems, err := t.opClient.ListVaultItems(ctx, vaultName)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -118,11 +123,6 @@ func (t *TazunaRunner) SecretToGenesisSecret(
 	}
 
 	// STEP3
-	dumpDir, err := cmd.Flags().GetString("dump-dir")
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
 	for i := range items {
 		secret := secrets[i]
 		item := items[i]
@@ -152,7 +152,7 @@ func (t *TazunaRunner) SecretToGenesisSecret(
 				Secrets: []v1.GenesisSecretGenerate{
 					{
 						PreferLabel: true, // tls.key/tls.crtを使うために必要
-						URI:         fmt.Sprintf("op://%s/%s/%s", opHost, vaultName, item.Title),
+						URI:         fmt.Sprintf("op://%s/%s/%s", opts.OpHost, vaultName, item.Title),
 						Items:       gsItems,
 					},
 				},
@@ -168,7 +168,7 @@ func (t *TazunaRunner) SecretToGenesisSecret(
 				},
 			},
 		}
-		path := filepath.Join(dumpDir, fmt.Sprintf("%s.yaml", secret.Name))
+		path := filepath.Join(opts.DumpDir, fmt.Sprintf("%s.yaml", secret.Name))
 
 		t.logger.DebugContext(ctx, "generate GenesisSecret", slog.String("path", path))
 
@@ -177,8 +177,10 @@ func (t *TazunaRunner) SecretToGenesisSecret(
 			return errors.WithStack(err)
 		}
 
-		if dryRun {
-			fmt.Printf("DRYRUN: generate GenesisSecret into %s\n", path)
+		if opts.DryRun {
+			if _, err := fmt.Fprintf(w, "DRYRUN: generate GenesisSecret into %s\n", path); err != nil {
+				return errors.WithStack(err)
+			}
 			continue
 		}
 
@@ -199,20 +201,20 @@ func (t *TazunaRunner) SecretToGenesisSecret(
 	return nil
 }
 
-// secretToGenesisSecretCommandToSecretListOptions は、
-// cobra.CommandからKubernetesのSecretListOptionsを生成する
-func secretToGenesisSecretCommandToSecretListOptions(cmd *cobra.Command) ([]client.ListOption, error) {
+// secretListOptionsFromOptions は SecretToGenesisSecretOptions から
+// KubernetesのSecret ListOptionsを生成する
+func secretListOptionsFromOptions(opts SecretToGenesisSecretOptions) ([]client.ListOption, error) {
 	listOptions := []client.ListOption{}
-	if labelSelectorStr, err := cmd.Flags().GetString("label-selector"); err == nil && labelSelectorStr != "" {
-		labelSelector, err := labelSelectorStringToMap(labelSelectorStr)
+	if opts.LabelSelector != "" {
+		labelSelector, err := labelSelectorStringToMap(opts.LabelSelector)
 		if err != nil {
 			return listOptions, errors.WithStack(err)
 		}
 		listOptions = append(listOptions, client.MatchingLabels(labelSelector))
 	}
 
-	if ns, err := cmd.Flags().GetString("namespace"); err == nil && ns != "" {
-		listOptions = append(listOptions, client.InNamespace(ns))
+	if opts.Namespace != "" {
+		listOptions = append(listOptions, client.InNamespace(opts.Namespace))
 	}
 
 	return listOptions, nil
@@ -288,6 +290,7 @@ func secretsToVaultItems(
 }
 
 func itemCreateCommandsFromItems(
+	ctx context.Context,
 	items []op.Item,
 	vaultName string,
 	dryRun bool,
@@ -314,7 +317,7 @@ func itemCreateCommandsFromItems(
 					),
 			).Build()
 
-		cmd := exec.Command(itemCreateCommand[0], itemCreateCommand[1:]...)
+		cmd := exec.CommandContext(ctx, itemCreateCommand[0], itemCreateCommand[1:]...)
 		itemBytes, err := json.Marshal(item)
 		if err != nil {
 			return commands, errors.WithStack(err)

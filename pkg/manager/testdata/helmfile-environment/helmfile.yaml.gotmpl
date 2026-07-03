@@ -1,0 +1,7 @@
+releases:
+  - name: mylocalrelease
+    namespace: default
+    chart: ../helmfile/mylocalchart
+    version: 0.1.0
+    values:
+      - labelFromStatic: {{ .Environment.Name }}

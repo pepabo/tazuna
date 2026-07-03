@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -22,6 +21,11 @@ func (t *TazunaRunner) Build(
 		return "", errors.WithStack(err)
 	}
 
+	// include展開後にもvalidationを実行し、include先ファイルのtypo等を検知する
+	if err := validateExpandedSpec(&tazuna, tazunaYAMLPath); err != nil {
+		return "", err
+	}
+
 	// manifest nameのバリデーション警告（移行期間のためエラーにはしない）
 	t.warnManifestNameValidation(ctx, tazuna)
 
@@ -31,33 +35,26 @@ func (t *TazunaRunner) Build(
 	t.ConvertManifestPathFromCwd(baseDir, &tazuna)
 	t.providersBaseDir = baseDir
 
-	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment)
 	if err != nil {
 		return "", errors.Wrap(err, "failed to setup managers")
 	}
 
 	var allOutputs []string
 
-	for _, manifest := range tazuna.Spec.Manifests {
+	for _, m := range tazuna.Spec.Manifests {
 		// タグフィルタリングのチェック
-		if len(t.tags) > 0 {
-			found := false
-			for _, tag := range t.tags {
-				found = found || slices.Contains(manifest.Tags, tag)
-			}
-
-			if !found {
-				t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(manifest.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
-				continue
-			}
+		if !matchesTags(m, t.tags) {
+			t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+			continue
 		}
 
-		manager, ok := managers[string(manifest.Type)]
+		mgr, ok := managers[string(m.Type)]
 		if !ok {
-			return "", fmt.Errorf("manager %s not found", manifest.Type)
+			return "", fmt.Errorf("manager %s not found", m.Type)
 		}
 
-		out, err := manager.Build(ctx, t.logger, manifest)
+		out, err := mgr.Build(ctx, t.logger, m)
 		if err != nil {
 			return "", errors.WithStack(err)
 		}

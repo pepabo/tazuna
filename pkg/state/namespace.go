@@ -13,6 +13,8 @@ import (
 
 // EnsureNamespace はtazuna namespaceが存在することを保証する。
 // 存在しない場合は新規作成し、既に存在する場合は何もしない。
+// 並列applyでは複数goroutineが同時にここへ到達するため、Createの
+// AlreadyExistsはレースの敗者として成功扱いにする。
 func EnsureNamespace(ctx context.Context, c client.Client) error {
 	ns := &corev1.Namespace{}
 	err := c.Get(ctx, client.ObjectKey{Name: TazunaNamespace}, ns)
@@ -31,6 +33,10 @@ func EnsureNamespace(ctx context.Context, c client.Client) error {
 		},
 	}
 	if err := c.Create(ctx, ns); err != nil {
+		if apierrors.IsAlreadyExists(err) {
+			slog.Debug("namespace was created concurrently", "namespace", TazunaNamespace)
+			return nil
+		}
 		return errors.Wrapf(err, "failed to create namespace %s", TazunaNamespace)
 	}
 

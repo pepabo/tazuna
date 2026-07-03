@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -75,8 +74,18 @@ func (t *TazunaRunner) Apply(
 		return errors.WithStack(err)
 	}
 
-	// manifest nameのバリデーション警告（移行期間のためエラーにはしない）
-	t.warnManifestNameValidation(ctx, tazuna)
+	// include展開後にもvalidationを実行し、include先ファイルのtypo等を検知する
+	if err := validateExpandedSpec(&tazuna, tazunaYAMLPath); err != nil {
+		return err
+	}
+
+	// manifest nameのバリデーション。--sync / dependsOn 使用時は不正名が
+	// state の上書きや誤 prune・誤った依存解決につながるためエラーに昇格する。
+	// それ以外は移行期間のため警告に留める。
+	strictNames := t.applyOpts.Sync || anyDependsOn(tazuna.Spec.Manifests)
+	if err := t.validateManifestNames(ctx, tazuna, strictNames); err != nil {
+		return err
+	}
 
 	// tazuna.yamlはマニフェストパスがtazuna.yamlからの相対パスで渡されているので、
 	// それをcwdからのパスに変換する
@@ -112,7 +121,7 @@ func (t *TazunaRunner) ApplyToCluster(
 	if t.managersOverride != nil {
 		managers = t.managersOverride
 	} else {
-		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment)
 		if err != nil {
 			return errors.Wrap(err, "failed to setup managers")
 		}
@@ -126,7 +135,9 @@ func (t *TazunaRunner) ApplyToCluster(
 	// state ConfigMapはtazuna namespace配下に作成されるが、namespaceの存在保証は
 	// ConfigMapStateStore.Save 側で行うため、ここでは明示的に ensure しない。
 	store := state.NewConfigMapStateStore(t.k8sClient)
-	gitCommit := getGitCommitHash(ctx)
+	// providersBaseDir は tazuna.yaml のディレクトリ (Apply の入口で設定済み)。
+	// cwd ではなく tazuna.yaml 側のリポジトリの commit hash を記録する。
+	gitCommit := getGitCommitHash(ctx, t.providersBaseDir)
 
 	// sync モードでは atomic 時の state を一旦バッファし、全 manifest 処理後に保存する。
 	// DAG モードでは同一層内のマニフェストが並列に書き込むため mutex で保護する。
@@ -148,17 +159,10 @@ func (t *TazunaRunner) ApplyToCluster(
 		errCh := make(chan error, len(layer))
 		var wg sync.WaitGroup
 		for _, m := range layer {
-			if len(t.tags) > 0 {
-				// タグが指定されている場合は、tagsに含まれるもののみを適用する
-				found := false
-				for _, tag := range t.tags {
-					found = found || slices.Contains(m.Tags, tag)
-				}
-
-				if !found {
-					t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
-					continue
-				}
+			// タグが指定されている場合は、tagsに含まれるもののみを適用する
+			if !matchesTags(m, t.tags) {
+				t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+				continue
 			}
 
 			wg.Add(1)
@@ -386,6 +390,15 @@ func (t *TazunaRunner) SyncManifest(
 			}
 		}
 
+		// helmfile の wait: true は mgr.Apply() 経由 (通常 apply) でしか実行されない
+		// ため、--sync でも同じ挙動になるようここで尊重する。差分ゼロの場合は
+		// リソースが既に適用済みであるため待機しない。
+		if wait, timeoutSeconds := manifestWaitConfig(m); wait {
+			if err := resource.WaitForReady(ctx, t.k8sClient, t.logger, objects, timeoutSeconds); err != nil {
+				return errors.Wrapf(err, "failed to wait for resources of manifest %q", m.Name)
+			}
+		}
+
 		// ステートを保存（atomicモード時は後でまとめて保存）
 		newStateData := &state.StateData{
 			Metadata: state.StateMetadata{
@@ -423,6 +436,22 @@ func (t *TazunaRunner) SyncManifest(
 	}
 
 	return nil
+}
+
+// manifestWaitConfig は manifest に wait 設定があるかどうかとタイムアウト秒数を返す。
+// helmfile manifest 本体と、ORAS の helmfile delegate の双方に対応する。
+func manifestWaitConfig(m v1.Manifest) (bool, int) {
+	switch m.Type {
+	case v1.ManifestTypeHelmfile:
+		if m.Helmfile != nil {
+			return m.Helmfile.Wait, m.Helmfile.TimeoutSeconds
+		}
+	case v1.ManifestTypeORAS:
+		if m.ORAS != nil && m.ORAS.Delegate.Type == v1.ORASDelegateTypeHelmfile && m.ORAS.Delegate.Helmfile != nil {
+			return m.ORAS.Delegate.Helmfile.Wait, m.ORAS.Delegate.Helmfile.TimeoutSeconds
+		}
+	}
+	return false, 0
 }
 
 // saveManifestState は適用済みmanifestのstateをConfigMapに保存する。
@@ -478,12 +507,12 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 	baseDir := filepath.Dir(tazunaYAMLPath)
 	var expandedManifests []v1.Manifest
 
-	for _, manifest := range tazuna.Spec.Manifests {
-		if len(manifest.Includes) > 0 {
+	for _, m := range tazuna.Spec.Manifests {
+		if len(m.Includes) > 0 {
 			// includesが指定されている場合、includeファイルを展開する
-			t.logger.DebugContext(ctx, "expanding includes", slog.Int("includeFiles", len(manifest.Includes)))
+			t.logger.DebugContext(ctx, "expanding includes", slog.Int("includeFiles", len(m.Includes)))
 
-			for _, include := range manifest.Includes {
+			for _, include := range m.Includes {
 				includePath := filepath.Join(baseDir, include.Path)
 
 				// includeファイルを読み込み
@@ -517,7 +546,7 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 			}
 		} else {
 			// includesが指定されていない場合、そのままマニフェストを追加
-			expandedManifests = append(expandedManifests, manifest)
+			expandedManifests = append(expandedManifests, m)
 		}
 	}
 

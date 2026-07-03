@@ -1,6 +1,12 @@
 package runner
 
 import (
+	"bytes"
+	"context"
+	"io"
+	"log/slog"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -8,7 +14,72 @@ import (
 	"github.com/pepabo/tazuna/pkg/op"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+// TestSecretToGenesisSecret_DryRun は options 構造体経由の呼び出しで
+// namespace / label-selector のフィルタが効き、dry-run 出力が
+// w に書き出されることを確認する (cobra 依存除去後の回帰テスト)。
+func TestSecretToGenesisSecret_DryRun(t *testing.T) {
+	t.Parallel()
+
+	secrets := []corev1.Secret{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "app-secret",
+				Namespace: "default",
+				Labels:    map[string]string{"team": "platform"},
+			},
+			Data: map[string][]byte{"password": []byte("s3cret")},
+		},
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "other-secret",
+				Namespace: "default",
+				Labels:    map[string]string{"team": "other"},
+			},
+			Data: map[string][]byte{"k": []byte("v")},
+		},
+	}
+	k8sClient := fake.NewClientBuilder().WithObjects(&secrets[0], &secrets[1]).Build()
+
+	// vault に同名 item が既に存在する状態にして op CLI の実行を回避する
+	opClient := op.NewFakeClient()
+	opClient.Vaults["my-vault"] = []op.Item{
+		{ID: "app-secret", Title: "app-secret"},
+	}
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	r := NewTazunaRunner(logger, k8sClient, opClient)
+
+	dumpDir := t.TempDir()
+	var out bytes.Buffer
+	err := r.SecretToGenesisSecret(context.Background(), SecretToGenesisSecretOptions{
+		LabelSelector: "team=platform",
+		Vault:         "my-vault",
+		Namespace:     "default",
+		DryRun:        true,
+		DumpDir:       dumpDir,
+		Note:          "test",
+		OpHost:        "example.1password.com",
+	}, &out)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// dry-run 出力は w に書かれ、label-selector に合致する Secret のみが対象になる
+	if !strings.Contains(out.String(), "app-secret.yaml") {
+		t.Errorf("dry-run output missing app-secret: %q", out.String())
+	}
+	if strings.Contains(out.String(), "other-secret") {
+		t.Errorf("label-selector filter did not apply: %q", out.String())
+	}
+
+	// dry-run ではファイルを書き出さない
+	if _, err := os.Stat(filepath.Join(dumpDir, "app-secret.yaml")); !os.IsNotExist(err) {
+		t.Errorf("dry-run should not write files, stat err = %v", err)
+	}
+}
 
 func TestLabelSelectorStringToMap(t *testing.T) {
 	t.Parallel()
@@ -177,7 +248,7 @@ func TestItemCreateCommandsFromItems(t *testing.T) {
 
 	t.Run("dry-run flag added", func(t *testing.T) {
 		t.Parallel()
-		cmds, err := itemCreateCommandsFromItems(items, "my-vault", true)
+		cmds, err := itemCreateCommandsFromItems(context.Background(), items, "my-vault", true)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -200,7 +271,7 @@ func TestItemCreateCommandsFromItems(t *testing.T) {
 
 	t.Run("non-dry-run no flag", func(t *testing.T) {
 		t.Parallel()
-		cmds, err := itemCreateCommandsFromItems(items, "v", false)
+		cmds, err := itemCreateCommandsFromItems(context.Background(), items, "v", false)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -214,7 +285,7 @@ func TestItemCreateCommandsFromItems(t *testing.T) {
 
 	t.Run("title in command", func(t *testing.T) {
 		t.Parallel()
-		cmds, _ := itemCreateCommandsFromItems(items, "v", false)
+		cmds, _ := itemCreateCommandsFromItems(context.Background(), items, "v", false)
 		args0 := strings.Join(cmds[0].Args, " ")
 		args1 := strings.Join(cmds[1].Args, " ")
 		if !strings.Contains(args0, "item1") {

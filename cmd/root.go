@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
 
+	"github.com/pepabo/tazuna/cmd/internal/cliutil"
 	"github.com/spf13/cobra"
 )
 
@@ -31,12 +34,21 @@ Main subcommands:
 	SilenceErrors: true,
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
+// ExecuteContext adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	err := rootCmd.Execute()
+// ctx は SIGINT/SIGTERM でキャンセルされる context を渡すことで、各コマンドの
+// cmd.Context() を通じて graceful shutdown を可能にする。
+func ExecuteContext(ctx context.Context) {
+	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %+v\n", err)
+		// 通常はメッセージのみ、--log-level debug のときだけフルスタックトレース
+		// (%+v) を出す。常に %+v だとユーザー向けエラーが読みにくいため。
+		format := "error: %v\n"
+		if lvl, ferr := rootCmd.PersistentFlags().GetString("log-level"); ferr == nil &&
+			cliutil.ParseLogLevel(lvl) == slog.LevelDebug {
+			format = "error: %+v\n"
+		}
+		fmt.Fprintf(os.Stderr, format, err)
 		os.Exit(1)
 	}
 }

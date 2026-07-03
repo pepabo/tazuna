@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 
 	"github.com/cockroachdb/errors"
@@ -30,18 +31,55 @@ var secretToGenesisSecretCmd = &cobra.Command{
 			return err
 		}
 
-		opHost, err := cmd.Flags().GetString("op-host")
+		// フラグのパースは cmd 層で行い、options 構造体に詰めて runner へ渡す。
+		// GetString 等のエラーを握り潰すとフィルタが黙って外れて namespace の
+		// 全 Secret が対象になりうるため、必ずエラーを返す。
+		opts, err := secretToGenesisSecretOptionsFromFlags(cmd)
 		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 
 		opClient := &op.CommandClient{}
 		r := runner.NewTazunaRunner(logger, k8sClient, opClient)
-		if err := r.SecretToGenesisSecret(cmd.Context(), cmd, opClient, k8sClient, opHost); err != nil {
+		if err := r.SecretToGenesisSecret(cmd.Context(), opts, os.Stdout); err != nil {
 			return errors.WithStack(err)
 		}
 		return nil
 	},
+}
+
+// secretToGenesisSecretOptionsFromFlags は CLI フラグをパースして
+// runner.SecretToGenesisSecretOptions を組み立てる。
+func secretToGenesisSecretOptionsFromFlags(cmd *cobra.Command) (runner.SecretToGenesisSecretOptions, error) {
+	opts := runner.SecretToGenesisSecretOptions{}
+
+	var err error
+	if opts.LabelSelector, err = cmd.Flags().GetString("label-selector"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.NameRegex, err = cmd.Flags().GetString("name-regex"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.Vault, err = cmd.Flags().GetString("vault"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.Namespace, err = cmd.Flags().GetString("namespace"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.DryRun, err = cmd.Flags().GetBool("dry-run"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.DumpDir, err = cmd.Flags().GetString("dump-dir"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.Note, err = cmd.Flags().GetString("note"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+	if opts.OpHost, err = cmd.Flags().GetString("op-host"); err != nil {
+		return opts, errors.WithStack(err)
+	}
+
+	return opts, nil
 }
 
 func init() {
@@ -58,7 +96,7 @@ func init() {
 	vaultCompletionFn := func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		vault := op.NewVaultCommandBuilder().WithList(op.NewVaultListCommandBuilder())
 		vaultListCommand := op.NewCommandBuilder().WithJSONFormat().WithVault(vault).Build()
-		out, err := exec.Command(vaultListCommand[0], vaultListCommand[1:]...).Output()
+		out, err := exec.CommandContext(cmd.Context(), vaultListCommand[0], vaultListCommand[1:]...).Output()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}

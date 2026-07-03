@@ -23,7 +23,9 @@ linters:
     # Extras chosen for low false-positive rate.
     - bodyclose      # http.Response.Body close
     - copyloopvar    # Go 1.22+ loop-var capture (harmless after 1.22, but catches stale code)
+    - errorlint      # error == comparisons and %v-instead-of-%w wrapping mistakes
     - misspell       # English typos in comments and strings
+    - noctx          # HTTP / exec calls without a context
     - unconvert      # redundant type conversions
   settings:
     misspell:

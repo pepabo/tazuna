@@ -46,6 +46,9 @@ releases:
 - `helmfile.yaml` 自体を Go テンプレートとして評価します。`.StateValues.<name>` /
   `.Values.<name>` で [`vars`](#vars) を参照でき、`default` などの
   [sprig](https://masterminds.github.io/sprig/) 関数が使えます。
+  ただし `env` / `expandenv` は使えません (ORAS 経由で取得したリモートの
+  helmfile が実行者の環境変数を読み取るのを防ぐため)。環境変数は
+  [`vars`](#vars) の `from: env` で明示的に渡してください。
 - `chart` は **ローカルチャートへの相対パス** のみ対応します
   (リモートリポジトリの chart はサポートしません)。
 - `values` は value ファイルのパスとインライン map を順にマージし、最後に
@@ -54,6 +57,8 @@ releases:
 helmfile 本体の以下の機能は **未対応** です: environments / リモート chart /
 `bases` / release 間の `needs` / `hooks` / `--selector` 等。これらが必要な場合は
 helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md) などで取り込んでください。
+ただしテンプレート内の `{{ .Environment.Name }}` は参照でき、tazuna の
+`-e/--environment` フラグの値が注入されます (未指定時は `"default"`)。
 
 ## 固有フィールド
 

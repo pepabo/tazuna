@@ -1,13 +1,15 @@
 package cmd
 
 import (
-	"context"
 	"os"
+	"path/filepath"
 
 	"github.com/cockroachdb/errors"
 	"github.com/pepabo/tazuna/cmd/internal/cliutil"
+	"github.com/pepabo/tazuna/pkg/kubecontext"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/runner"
+	"github.com/pepabo/tazuna/pkg/validator"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +42,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		defer func() { _ = shutdownTracer(context.Background()) }()
+		defer cliutil.ShutdownTracerWithWarn(shutdownTracer)
 
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
@@ -59,18 +61,41 @@ Examples:
 			return err
 		}
 
+		orasOpts, err := buildORASPullOptions(cmd)
+		if err != nil {
+			return err
+		}
+
 		environment := cliutil.Environment(cmd)
 		r := runner.NewTazunaRunner(
 			logger,
 			k8sClient,
 			&op.CommandClient{},
 			runner.WithTags(tags),
+			runner.WithORASPullOptions(orasOpts),
 			runner.WithEnvironment(environment),
 		)
 
 		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
 		if err != nil {
 			return err
+		}
+
+		// tazuna.yamlのvalidation（include展開前のバリデーション）
+		if err := validator.ValidateTazunaWithBasePath(tazuna, filepath.Dir(path)); err != nil {
+			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
+		}
+
+		// plan はライブクラスタへ GET を行うため、apply / destroy と同様に
+		// context_matches で意図しないクラスタへの実行を防ぐ。
+		contextMatches, contextMatchMode, err := cliutil.ResolveContextMatches(tazuna.Spec, environment)
+		if err != nil {
+			return err
+		}
+		if len(contextMatches) > 0 {
+			if err := kubecontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
+				return err
+			}
 		}
 
 		if err := r.Plan(ctx, *tazuna, path, os.Stdout); err != nil {
@@ -82,5 +107,6 @@ Examples:
 
 func init() {
 	addTagsFlag(planCmd, "Filter manifests by tag; only matching tags are planned")
+	addORASPullFlags(planCmd)
 	rootCmd.AddCommand(planCmd)
 }

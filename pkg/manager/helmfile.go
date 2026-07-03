@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"text/template"
-	"time"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/hint"
@@ -18,6 +17,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Masterminds/sprig/v3"
@@ -27,7 +27,6 @@ import (
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/registry"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
 
@@ -53,6 +52,9 @@ import (
 type Helmfile struct {
 	client   client.Client
 	opClient op.Client
+	// environment は -e/--environment フラグの値。helmfile.yaml テンプレートの
+	// {{ .Environment.Name }} に注入される。空文字なら "default"。
+	environment string
 }
 
 // Destroy implements Manager.
@@ -111,88 +113,12 @@ func (h *Helmfile) Apply(ctx context.Context, logger *slog.Logger, m v1.Manifest
 
 	// Wait が設定されている場合は、リソースが Ready になるまで待つ
 	if m.Helmfile.Wait {
-		if err := h.waitForResources(ctx, logger, objects, m.Helmfile.TimeoutSeconds); err != nil {
+		if err := resource.WaitForReady(ctx, h.client, logger, objects, m.Helmfile.TimeoutSeconds); err != nil {
 			return nil, errors.WithStack(err)
 		}
 	}
 
 	return objects, nil
-}
-
-// waitForResources は、指定されたリソースが Ready になるまで待機します
-func (h *Helmfile) waitForResources(ctx context.Context, logger *slog.Logger, objects []client.Object, timeout int) error {
-	// デフォルトのタイムアウトは 5 分
-	if timeout == 0 {
-		timeout = 300
-	}
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-	defer cancel()
-
-	for _, obj := range objects {
-		if err := h.waitForResource(timeoutCtx, logger, obj); err != nil {
-			return errors.Wrapf(err, "failed to wait for resource %s/%s", obj.GetNamespace(), obj.GetName())
-		}
-	}
-
-	return nil
-}
-
-// waitForResource は、単一のリソースが Ready になるまで待機します
-func (h *Helmfile) waitForResource(ctx context.Context, logger *slog.Logger, obj client.Object) error {
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	logger.InfoContext(ctx, "waiting for resource to be ready",
-		slog.String("namespace", obj.GetNamespace()),
-		slog.String("name", obj.GetName()),
-		slog.String("kind", gvk.Kind))
-
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return errors.Errorf("timeout waiting for %s %s/%s to be ready", gvk.Kind, obj.GetNamespace(), obj.GetName())
-		case <-ticker.C:
-			ready, err := h.isResourceReady(ctx, obj)
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			if ready {
-				logger.InfoContext(ctx, "resource is ready",
-					slog.String("namespace", obj.GetNamespace()),
-					slog.String("name", obj.GetName()),
-					slog.String("kind", gvk.Kind))
-				return nil
-			}
-		}
-	}
-}
-
-// isResourceReady は、リソースが Ready 状態かどうかを確認します。
-// 判定ロジック自体は pkg/resource に切り出されており、本メソッドはライブ取得した
-// unstructured を resource.IsReady に委譲する薄いラッパーです。
-func (h *Helmfile) isResourceReady(ctx context.Context, obj client.Object) (bool, error) {
-	gvk := obj.GetObjectKind().GroupVersionKind()
-	key := client.ObjectKey{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-	}
-
-	// リソースの最新状態を unstructured で取得
-	// manifest.ConvertManifestsToObjects が *unstructured.Unstructured を返すため、
-	// client.Get の結果も unstructured で受け取る
-	current := &unstructured.Unstructured{}
-	current.SetGroupVersionKind(gvk)
-	if err := h.client.Get(ctx, key, current); err != nil {
-		if client.IgnoreNotFound(err) == nil {
-			// リソースがまだ存在しない場合は ready ではない
-			return false, nil
-		}
-		return false, errors.WithStack(err)
-	}
-
-	return resource.IsReady(current)
 }
 
 func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (map[string]any, error) {
@@ -256,23 +182,30 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 				return nil, errors.Wrapf(err, "failed to get vault item %s from %s", v.Op.Item, v.Op.Vault)
 			}
 
+			found := false
 			for _, field := range item.Fields {
 				if v.Op.Key == v1.HelmFileVarOpKeyID {
 					if field.ID == v.Op.Field {
 						vars[k] = field.Value
+						found = true
 						break
 					}
 				} else if v.Op.Key == v1.HelmFileVarOpKeyLabel {
 					if field.Label == v.Op.Field {
 						vars[k] = field.Value
+						found = true
 						break
 					}
 				}
 			}
 
-			if vars[k] == "" {
+			if !found {
 				return nil, errors.Errorf("helmfile var %s has From op but op field %s not found in item %s", k, v.Op.Field, v.Op.Item)
 			}
+		default:
+			// typo等の未知のFromを黙って無視するとvarが欠落したまま
+			// missingkey=zeroでゼロ値レンダリングされるため、明示的にエラーにする
+			return nil, errors.Errorf("helmfile var %s has unsupported From field: %s, supported From is 'env/static/op'", k, v.From)
 		}
 	}
 
@@ -301,7 +234,14 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 var _ Manager = &Helmfile{}
 
 func NewHelmfile(client client.Client, opClient op.Client) *Helmfile {
-	return &Helmfile{client, opClient}
+	return &Helmfile{client: client, opClient: opClient}
+}
+
+// WithEnvironment は -e/--environment フラグの値を設定します。
+// helmfile.yaml テンプレートの {{ .Environment.Name }} に反映されます。
+func (h *Helmfile) WithEnvironment(environment string) *Helmfile {
+	h.environment = environment
+	return h
 }
 
 // Build implements Manager.
@@ -357,7 +297,7 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	}
 
 	// helmfile.yaml 自体を Go テンプレートとして解釈する (.StateValues / .Values)。
-	rendered, err := renderHelmfileTemplate(helmfilePath, raw, vars)
+	rendered, err := renderHelmfileTemplate(helmfilePath, raw, vars, h.environment)
 	if err != nil {
 		return "", errors.Wrapf(err, "failed to render helmfile template %s", helmfilePath)
 	}
@@ -369,13 +309,51 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 
 	baseDir := filepath.Dir(helmfilePath)
 
-	var docs [][]byte
-	for i := range spec.Releases {
-		rel := spec.Releases[i]
-		out, err := h.renderRelease(baseDir, &rel, m.Helmfile)
+	// ExtraValueFiles は release 間で共通のため、release ごとに再読込せず
+	// 一度だけ読み込んで共有する。
+	extraValues := map[string]any{}
+	for _, vf := range m.Helmfile.ExtraValueFiles {
+		merged, err := loadValueFile(baseDir, vf)
 		if err != nil {
-			return "", errors.Wrapf(err, "failed to render release %q", rel.Name)
+			return "", errors.Wrapf(err, "failed to load extra value file %s", vf)
 		}
+		extraValues = mergeMaps(extraValues, merged)
+	}
+
+	// OCI chart 用の registry client は release ごとに生成せず共有する。
+	var registryClient *registry.Client
+	for i := range spec.Releases {
+		if registry.IsOCI(spec.Releases[i].Chart) {
+			rc, err := registry.NewClient()
+			if err != nil {
+				return "", errors.Wrap(err, "failed to create helm registry client")
+			}
+			registryClient = rc
+			break
+		}
+	}
+
+	// release は互いに独立に render できるため errgroup で並列化する。
+	results := make([]string, len(spec.Releases))
+	g, _ := errgroup.WithContext(ctx)
+	g.SetLimit(releaseRenderConcurrency)
+	for i := range spec.Releases {
+		g.Go(func() error {
+			rel := &spec.Releases[i]
+			out, err := h.renderRelease(baseDir, rel, m.Helmfile, extraValues, registryClient)
+			if err != nil {
+				return errors.Wrapf(err, "failed to render release %q", rel.Name)
+			}
+			results[i] = out
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return "", err
+	}
+
+	var docs [][]byte
+	for _, out := range results {
 		if trimmed := bytes.TrimSpace([]byte(out)); len(trimmed) > 0 {
 			docs = append(docs, trimmed)
 		}
@@ -383,6 +361,10 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 
 	return string(bytes.Join(docs, []byte("\n---\n"))), nil
 }
+
+// releaseRenderConcurrency は release render の並列数。helm の in-memory render は
+// CPU バウンドのため控えめな値にする。
+const releaseRenderConcurrency = 4
 
 // defaultHelmfileNames は m.Path がディレクトリのときに探索する helmfile ファイル名の
 // 優先順位。helmfile 本体の既定 (gotmpl 優先) に倣う。
@@ -428,7 +410,9 @@ type helmfileRelease struct {
 }
 
 // renderRelease は 1 release を helm の ClientOnly + DryRun install で render します。
-func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile) (string, error) {
+// extraValues は release 間で共有される追加 values (読み込み済み)、registryClient は
+// OCI chart 用の共有 client (OCI chart がない場合は nil)。
+func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile, extraValues map[string]any, registryClient *registry.Client) (string, error) {
 	if rel.Chart == "" {
 		return "", errors.Errorf("release %q has no chart", rel.Name)
 	}
@@ -440,9 +424,8 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	// あるため、actionCfg.RegistryClient を NewInstall 前に設定しておく
 	// (action.NewInstall が ChartPathOptions.registryClient にコピーする)。
 	if registry.IsOCI(rel.Chart) {
-		registryClient, err := registry.NewClient()
-		if err != nil {
-			return "", errors.Wrap(err, "failed to create helm registry client")
+		if registryClient == nil {
+			return "", errors.Errorf("release %q references an OCI chart but no registry client is available", rel.Name)
 		}
 		actionCfg.RegistryClient = registryClient
 	}
@@ -476,7 +459,8 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	}
 
 	// release の values (ファイル + インライン) を順にマージし、最後に
-	// extraValueFiles を上書きとしてマージする (helmfile の --values 相当)。
+	// extraValues (extraValueFiles の読み込み済みマージ結果) を上書きとして
+	// マージする (helmfile の --values 相当)。
 	values := map[string]any{}
 	for _, v := range rel.Values {
 		merged, err := loadValueEntry(baseDir, v)
@@ -485,13 +469,7 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 		}
 		values = mergeMaps(values, merged)
 	}
-	for _, vf := range cfg.ExtraValueFiles {
-		merged, err := loadValueFile(baseDir, vf)
-		if err != nil {
-			return "", errors.Wrapf(err, "failed to load extra value file %s", vf)
-		}
-		values = mergeMaps(values, merged)
-	}
+	values = mergeMaps(values, extraValues)
 
 	release, err := inst.Run(chrt, values)
 	if err != nil {
@@ -522,21 +500,39 @@ func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef stri
 	return chartPath, nil
 }
 
+// helmfileTemplateFuncs は helmfile render 用の sprig FuncMap を返します。
+// env / expandenv は除外します。ORAS 経由で取得したリモートアーティファクト内の
+// helmfile もこの経路で render されるため、悪意ある（または改竄された）テンプレートが
+// `{{ env "AWS_SECRET_ACCESS_KEY" }}` のように実行者の環境変数を窃取して
+// マニフェストへ焼き込むのを防ぐ。環境変数を参照したい場合は helmfile vars の
+// `from: env` を明示的に使うこと。
+func helmfileTemplateFuncs() template.FuncMap {
+	funcs := sprig.TxtFuncMap()
+	delete(funcs, "env")
+	delete(funcs, "expandenv")
+	return funcs
+}
+
 // renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
 // helmfile 互換のため .StateValues と .Values の双方から vars を参照できるようにします。
-func renderHelmfileTemplate(path string, raw []byte, vars map[string]any) ([]byte, error) {
+// environment は {{ .Environment.Name }} に注入される。空文字なら helmfile の
+// 慣習に合わせて "default" になる。
+func renderHelmfileTemplate(path string, raw []byte, vars map[string]any, environment string) ([]byte, error) {
 	tmpl, err := template.New(filepath.Base(path)).
-		Funcs(sprig.TxtFuncMap()).
+		Funcs(helmfileTemplateFuncs()).
 		Option("missingkey=zero").
 		Parse(string(raw))
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
 
+	if environment == "" {
+		environment = "default"
+	}
 	data := map[string]any{
 		"StateValues": vars,
 		"Values":      vars,
-		"Environment": map[string]any{"Name": "default"},
+		"Environment": map[string]any{"Name": environment},
 	}
 
 	var buf bytes.Buffer

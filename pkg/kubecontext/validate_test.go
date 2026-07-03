@@ -1,4 +1,4 @@
-package context
+package kubecontext
 
 import (
 	"strings"
@@ -38,6 +38,19 @@ func TestMatchContext_OR(t *testing.T) {
 			name:        "no pattern matches",
 			context:     "staging-cluster",
 			patterns:    []string{"^kind-.*$", "^prod-.*$"},
+			expectErr:   true,
+			errContains: "does not match any of context_matches patterns",
+		},
+		{
+			name:      "anchorless pattern matches whole name",
+			context:   "prod",
+			patterns:  []string{"prod"},
+			expectErr: false,
+		},
+		{
+			name:        "anchorless pattern does not partially match",
+			context:     "preprod-cluster",
+			patterns:    []string{"prod"},
 			expectErr:   true,
 			errContains: "does not match any of context_matches patterns",
 		},

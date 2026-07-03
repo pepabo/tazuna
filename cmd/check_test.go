@@ -108,3 +108,70 @@ spec:
 		t.Errorf("expected a name to be assigned, got:\n%s", fixed)
 	}
 }
+
+func TestCheckCmd_Fix_RefusesTemplateExpressions(t *testing.T) {
+	// Go template 式を含むファイルは --fix で描画結果に固定化されてしまうため拒否する
+	body := `apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+  - type: kustomize
+    path: ./kustomize/{{ .Environment }}
+`
+	path := writeYAML(t, body)
+	err := runCheck(t, []string{"-f", path, "--fix"})
+	if err == nil {
+		t.Fatal("expected --fix to be refused for template expressions, got nil")
+	}
+	if !strings.Contains(err.Error(), "template expressions") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+	// ファイルが書き換えられていないことを確認
+	after, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read back: %v", readErr)
+	}
+	if string(after) != body {
+		t.Errorf("file was modified despite refusal:\n%s", after)
+	}
+}
+
+func TestCheckCmd_Fix_RefusesIncludes(t *testing.T) {
+	// includes を持つファイルは --fix で展開結果がインライン化されてしまうため拒否する
+	dir := t.TempDir()
+	includePath := filepath.Join(dir, "include.yaml")
+	if err := os.WriteFile(includePath, []byte(`spec:
+  manifests:
+  - name: kustomize-app
+    type: kustomize
+    path: ./kustomize
+`), 0o644); err != nil {
+		t.Fatalf("write include file: %v", err)
+	}
+	body := `apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  manifests:
+  - includes:
+    - path: include.yaml
+`
+	path := filepath.Join(dir, "tazuna.yaml")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write tmp file: %v", err)
+	}
+
+	err := runCheck(t, []string{"-f", path, "--fix"})
+	if err == nil {
+		t.Fatal("expected --fix to be refused for includes, got nil")
+	}
+	if !strings.Contains(err.Error(), "includes") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+	after, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read back: %v", readErr)
+	}
+	if string(after) != body {
+		t.Errorf("file was modified despite refusal:\n%s", after)
+	}
+}

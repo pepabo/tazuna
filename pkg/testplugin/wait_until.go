@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/cockroachdb/errors"
 	"github.com/google/cel-go/cel"
@@ -15,6 +16,12 @@ import (
 
 type WaitUntil struct {
 	client client.Client
+
+	// prgMu / prgCache はコンパイル済みCELプログラムのキャッシュ。
+	// Runはポーリングループから同じ式で繰り返し呼ばれるため、
+	// 式ごとに一度だけコンパイルして再利用する。
+	prgMu    sync.Mutex
+	prgCache map[string]cel.Program
 }
 
 // Run implements Plugin.
@@ -45,7 +52,12 @@ func (w *WaitUntil) Run(
 		return errors.WithStack(err)
 	}
 
-	result, err := EvaluateCEL(args.Condition, obj.Object)
+	prg, err := w.program(args.Condition)
+	if err != nil {
+		return err
+	}
+
+	result, err := evaluateCELProgram(prg, obj.Object)
 	if err != nil {
 		return err
 	}
@@ -63,35 +75,63 @@ func (w *WaitUntil) Type() v1.TestPluginType {
 }
 
 func NewWaitUntil(c client.Client) *WaitUntil {
-	return &WaitUntil{c}
+	return &WaitUntil{client: c}
 }
 
 var _ Plugin = &WaitUntil{}
 
-// evaluateCEL はCEL式を評価し、結果をboolで返す
-func EvaluateCEL(expression string, object map[string]interface{}) (bool, error) {
+// program は式に対応するコンパイル済みCELプログラムを返す。
+// 初回のみコンパイルし、以降はキャッシュを返す。
+func (w *WaitUntil) program(expression string) (cel.Program, error) {
+	w.prgMu.Lock()
+	defer w.prgMu.Unlock()
+
+	if prg, ok := w.prgCache[expression]; ok {
+		return prg, nil
+	}
+
+	prg, err := CompileCEL(expression)
+	if err != nil {
+		return nil, err
+	}
+
+	if w.prgCache == nil {
+		w.prgCache = map[string]cel.Program{}
+	}
+	w.prgCache[expression] = prg
+	return prg, nil
+}
+
+// CompileCEL はCEL式をコンパイルしてプログラムを返す。
+// 出力型はboolに制限される。
+func CompileCEL(expression string) (cel.Program, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("object", cel.DynType),
 	)
 	if err != nil {
-		return false, fmt.Errorf("failed to create CEL environment: %w", err)
+		return nil, fmt.Errorf("failed to create CEL environment: %w", err)
 	}
 
 	ast, issues := env.Compile(expression)
 	if issues != nil && issues.Err() != nil {
-		return false, fmt.Errorf("failed to compile CEL expression: %w", issues.Err())
+		return nil, fmt.Errorf("failed to compile CEL expression: %w", issues.Err())
 	}
 
 	if ast.OutputType() != cel.BoolType {
-		return false, fmt.Errorf("CEL expression result is not a bool type: %s", ast.OutputType())
+		return nil, fmt.Errorf("CEL expression result is not a bool type: %s", ast.OutputType())
 	}
 
 	prg, err := env.Program(ast)
 	if err != nil {
-		return false, fmt.Errorf("failed to create CEL program: %w", err)
+		return nil, fmt.Errorf("failed to create CEL program: %w", err)
 	}
 
-	out, _, err := prg.Eval(map[string]interface{}{
+	return prg, nil
+}
+
+// evaluateCELProgram はコンパイル済みCELプログラムをobjectに対して評価する。
+func evaluateCELProgram(prg cel.Program, object map[string]any) (bool, error) {
+	out, _, err := prg.Eval(map[string]any{
 		"object": object,
 	})
 	if err != nil {
@@ -104,4 +144,15 @@ func EvaluateCEL(expression string, object map[string]interface{}) (bool, error)
 	}
 
 	return result, nil
+}
+
+// EvaluateCEL はCEL式をコンパイルして評価し、結果をboolで返す。
+// ポーリングループから呼ぶ場合はコンパイル結果を再利用できる
+// CompileCEL + evaluateCELProgram の経路を使うこと。
+func EvaluateCEL(expression string, object map[string]any) (bool, error) {
+	prg, err := CompileCEL(expression)
+	if err != nil {
+		return false, err
+	}
+	return evaluateCELProgram(prg, object)
 }
