@@ -163,19 +163,16 @@ func TestStateSubcommandsAreRegistered(t *testing.T) {
 		"diff":  true,
 		"drift": true,
 	}
-	for _, c := range stateCmd.Commands() {
-		delete(want, c.Name())
-	}
-	if len(want) != 0 {
-		t.Errorf("state subcommands missing: %v", want)
-	}
-}
-
-func TestStateSyncSubcommandIsRemoved(t *testing.T) {
-	t.Parallel()
+	// cobra の Commands() は初回呼び出し時に内部スライスを遅延ソートするため、
+	// 複数の並行テストから同じコマンドに対して呼ぶと data race になる。
+	// stateCmd.Commands() を呼ぶ検証はこのテストに集約する。
 	for _, c := range stateCmd.Commands() {
 		if c.Name() == "sync" {
 			t.Errorf("state sync subcommand should not exist after merge into apply")
 		}
+		delete(want, c.Name())
+	}
+	if len(want) != 0 {
+		t.Errorf("state subcommands missing: %v", want)
 	}
 }
