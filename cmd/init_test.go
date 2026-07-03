@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
+	"github.com/spf13/pflag"
 )
 
 func TestInitialMinimumSupportedVersion(t *testing.T) {
@@ -50,6 +51,12 @@ func runInit(t *testing.T, args ...string) (string, error) {
 		rootCmd.SetArgs(nil)
 		rootCmd.SetOut(nil)
 		rootCmd.SetErr(nil)
+		// cobra のフラグ値は Execute() をまたいでプロセス内に保持されるため、
+		// デフォルトに戻さないと後続のテスト実行（-count>1 など）に漏れる。
+		initCmd.Flags().VisitAll(func(f *pflag.Flag) {
+			_ = f.Value.Set(f.DefValue)
+			f.Changed = false
+		})
 	})
 	err := rootCmd.Execute()
 	return buf.String(), err
