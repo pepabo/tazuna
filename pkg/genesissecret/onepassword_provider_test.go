@@ -91,6 +91,26 @@ func TestOnePasswordProvider_Fetch_MissingKey(t *testing.T) {
 	}
 }
 
+func TestOnePasswordProvider_Fetch_MalformedURI(t *testing.T) {
+	t.Parallel()
+	fake := newFakeWithItem("v", "item", []op.ItemField{
+		{ID: "id1", Label: "username", Value: "alice"},
+	})
+	p := genesissecret.NewOnePasswordProvider(fake)
+
+	// op CLI で一般的な op://<vault>/<item> 形式は host 部が欠けているため
+	// panic せずにエラーを返す（regression test for index out of range）
+	_, err := p.Fetch(context.Background(), v1.GenesisSecretGenerate{
+		URI: "op://v/item",
+		Items: map[string]v1.GenesisSecretGenerateItem{
+			"username": {MapTo: "u"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for malformed URI, got nil")
+	}
+}
+
 func TestOnePasswordProvider_Fetch_EmptyItems(t *testing.T) {
 	t.Parallel()
 	fake := newFakeWithItem("v", "item", []op.ItemField{

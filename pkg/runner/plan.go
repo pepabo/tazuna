@@ -16,11 +16,17 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	utildiff "k8s.io/apimachinery/pkg/util/diff"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// liveGetConcurrency は read 系コマンド (plan / drift / status) がライブクラスタへ
+// リソースを GET する際の並列数。read-only なので安全に並列化でき、
+// リソース数に比例した所要時間の短縮が見込める。
+const liveGetConcurrency = 8
 
 // planChangeKind は plan で検出されるリソース変更の種類を表す
 type planChangeKind string
@@ -151,59 +157,40 @@ func (t *TazunaRunner) resolvePlanManagers(tazuna v1.Tazuna) (map[string]manager
 		}
 		return out, nil
 	}
-	return setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir)
+	return setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment)
 }
 
 // computePlanChanges は desired (Build() 由来) オブジェクト群とライブクラスタの状態を
 // 比較し、planChange のスライスとして返す。差分なしのものは含めない。
+// ライブ GET は read-only なので errgroup で並列化する。
 // 安定した出力のため resourceKey でソートする。
 func (t *TazunaRunner) computePlanChanges(
 	ctx context.Context,
 	desiredObjects []client.Object,
 ) ([]planChange, error) {
-	changes := make([]planChange, 0, len(desiredObjects))
+	results := make([]*planChange, len(desiredObjects))
 
-	for _, desired := range desiredObjects {
-		desiredUns, ok := desired.(*unstructured.Unstructured)
-		if !ok {
-			continue
-		}
-
-		resourceKey := formatPlanResourceKey(desiredUns)
-
-		live := &unstructured.Unstructured{}
-		live.SetGroupVersionKind(desiredUns.GroupVersionKind())
-		err := t.k8sClient.Get(ctx, client.ObjectKey{
-			Namespace: desiredUns.GetNamespace(),
-			Name:      desiredUns.GetName(),
-		}, live)
-
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				changes = append(changes, planChange{
-					kind:        planChangeCreate,
-					resourceKey: resourceKey,
-				})
-				continue
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(liveGetConcurrency)
+	for i, desired := range desiredObjects {
+		g.Go(func() error {
+			ch, err := t.computePlanChangeForObject(gctx, desired)
+			if err != nil {
+				return err
 			}
-			return nil, errors.Wrapf(err, "failed to get live resource for %s", resourceKey)
-		}
-
-		// 比較に不要な server-managed フィールドを落として diff のノイズを減らす。
-		// resourceVersion / uid などは apply に直接関係しないため。
-		liveForDiff := sanitizeForDiff(live)
-		desiredForDiff := sanitizeForDiff(desiredUns)
-
-		diff := utildiff.Diff(liveForDiff.Object, desiredForDiff.Object)
-		if strings.TrimSpace(diff) == "" {
-			continue
-		}
-
-		changes = append(changes, planChange{
-			kind:        planChangeUpdate,
-			resourceKey: resourceKey,
-			diff:        diff,
+			results[i] = ch
+			return nil
 		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	changes := make([]planChange, 0, len(desiredObjects))
+	for _, ch := range results {
+		if ch != nil {
+			changes = append(changes, *ch)
+		}
 	}
 
 	sort.Slice(changes, func(i, j int) bool {
@@ -214,6 +201,53 @@ func (t *TazunaRunner) computePlanChanges(
 	})
 
 	return changes, nil
+}
+
+// computePlanChangeForObject は 1 つの desired オブジェクトをライブクラスタと比較する。
+// 差分がなければ nil を返す。
+func (t *TazunaRunner) computePlanChangeForObject(
+	ctx context.Context,
+	desired client.Object,
+) (*planChange, error) {
+	desiredUns, ok := desired.(*unstructured.Unstructured)
+	if !ok {
+		return nil, nil
+	}
+
+	resourceKey := formatPlanResourceKey(desiredUns)
+
+	live := &unstructured.Unstructured{}
+	live.SetGroupVersionKind(desiredUns.GroupVersionKind())
+	err := t.k8sClient.Get(ctx, client.ObjectKey{
+		Namespace: desiredUns.GetNamespace(),
+		Name:      desiredUns.GetName(),
+	}, live)
+
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return &planChange{
+				kind:        planChangeCreate,
+				resourceKey: resourceKey,
+			}, nil
+		}
+		return nil, errors.Wrapf(err, "failed to get live resource for %s", resourceKey)
+	}
+
+	// 比較に不要な server-managed フィールドを落として diff のノイズを減らす。
+	// resourceVersion / uid などは apply に直接関係しないため。
+	liveForDiff := sanitizeForDiff(live)
+	desiredForDiff := sanitizeForDiff(desiredUns)
+
+	diff := utildiff.Diff(liveForDiff.Object, desiredForDiff.Object)
+	if strings.TrimSpace(diff) == "" {
+		return nil, nil
+	}
+
+	return &planChange{
+		kind:        planChangeUpdate,
+		resourceKey: resourceKey,
+		diff:        diff,
+	}, nil
 }
 
 // sanitizeForDiff は diff の前にライブオブジェクトから server-side で付与される

@@ -3,8 +3,6 @@ package genesissecret
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"strings"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/op"
@@ -16,13 +14,10 @@ type OnePasswordProvider struct {
 
 // Fetch implements SecretProvider.
 func (o *OnePasswordProvider) Fetch(ctx context.Context, s v1.GenesisSecretGenerate) (map[string]string, error) {
-	u, err := url.Parse(s.URI)
+	vault, itemName, err := ParseOnePasswordURI(s.URI)
 	if err != nil {
 		return nil, err
 	}
-	v := strings.Split(u.Path, "/")
-	vault := v[1]
-	itemName := v[2]
 
 	item, err := o.client.GetVaultItem(ctx, vault, itemName)
 	if err != nil {

@@ -84,6 +84,8 @@ func TestSubcommandFlags(t *testing.T) {
 			cmd: planCmd,
 			flags: []flagSpec{
 				{name: "tags", defaultVal: "[]"},
+				{name: "no-cache", defaultVal: "false"},
+				{name: "offline", defaultVal: "false"},
 			},
 		},
 		{

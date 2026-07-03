@@ -24,12 +24,44 @@ func TestValidateManifestNames(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "valid names with hyphens and underscores",
+			name: "valid names with hyphens and digits",
 			manifests: []v1.Manifest{
-				{Name: "my-manifest_01"},
-				{Name: "A-Z_test"},
+				{Name: "my-manifest-01"},
+				{Name: "0-leading-digit"},
 			},
 			wantErr: false,
+		},
+		{
+			name: "underscore is not allowed (breaks state key encoding)",
+			manifests: []v1.Manifest{
+				{Name: "my__app"},
+			},
+			wantErr:     true,
+			errContains: []string{"invalid characters"},
+		},
+		{
+			name: "uppercase is not allowed (breaks ConfigMap name)",
+			manifests: []v1.Manifest{
+				{Name: "A-Z-test"},
+			},
+			wantErr:     true,
+			errContains: []string{"invalid characters"},
+		},
+		{
+			name: "trailing hyphen is not allowed",
+			manifests: []v1.Manifest{
+				{Name: "trailing-"},
+			},
+			wantErr:     true,
+			errContains: []string{"invalid characters"},
+		},
+		{
+			name: "too long name",
+			manifests: []v1.Manifest{
+				{Name: strings.Repeat("a", 241)},
+			},
+			wantErr:     true,
+			errContains: []string{"too long"},
 		},
 		{
 			name: "empty name",
@@ -117,25 +149,5 @@ func TestValidateManifestNames(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestCollectAllManifests(t *testing.T) {
-	manifests := []v1.Manifest{
-		{Name: "top1"},
-		{Name: "middle"},
-		{Name: "top2"},
-	}
-
-	result := CollectAllManifests(manifests)
-	if len(result) != 3 {
-		t.Fatalf("expected 3 manifests, got %d", len(result))
-	}
-
-	expected := []string{"top1", "middle", "top2"}
-	for i, name := range expected {
-		if result[i].Name != name {
-			t.Errorf("result[%d].Name = %q, want %q", i, result[i].Name, name)
-		}
 	}
 }

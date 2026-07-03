@@ -1,4 +1,4 @@
-package context
+package kubecontext
 
 import (
 	"fmt"
@@ -31,9 +31,9 @@ func matchContext(currentContext string, patterns []string, mode v1.ContextMatch
 	switch mode {
 	case v1.ContextMatchModeOR:
 		for _, pattern := range patterns {
-			matched, err := regexp.MatchString(pattern, currentContext)
+			matched, err := matchContextPattern(pattern, currentContext)
 			if err != nil {
-				return errors.Errorf("failed to match context_matches pattern %q: %s", pattern, err)
+				return err
 			}
 			if matched {
 				return nil
@@ -44,9 +44,9 @@ func matchContext(currentContext string, patterns []string, mode v1.ContextMatch
 	case v1.ContextMatchModeAND:
 		var unmatched []string
 		for _, pattern := range patterns {
-			matched, err := regexp.MatchString(pattern, currentContext)
+			matched, err := matchContextPattern(pattern, currentContext)
 			if err != nil {
-				return errors.Errorf("failed to match context_matches pattern %q: %s", pattern, err)
+				return err
 			}
 			if !matched {
 				unmatched = append(unmatched, pattern)
@@ -60,6 +60,18 @@ func matchContext(currentContext string, patterns []string, mode v1.ContextMatch
 	default:
 		return errors.Errorf("unsupported context_match_mode: %s", mode)
 	}
+}
+
+// matchContextPattern はコンテキスト名がパターンに完全一致するかを返す。
+// regexp.MatchString は部分一致のため、"prod" が "preprod-cluster" にも
+// マッチしてしまう。安全ガードの意図に対しマッチ範囲が広すぎるので、
+// パターンを ^(?:...)$ で包んで完全一致とする。
+func matchContextPattern(pattern, currentContext string) (bool, error) {
+	matched, err := regexp.MatchString("^(?:"+pattern+")$", currentContext)
+	if err != nil {
+		return false, errors.Errorf("failed to match context_matches pattern %q: %s", pattern, err)
+	}
+	return matched, nil
 }
 
 func joinPatterns(patterns []string) string {

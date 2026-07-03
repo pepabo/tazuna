@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -202,29 +203,44 @@ func applySecretFields(secret *corev1.Secret, o v1.GenesisSecretOutput, items ma
 	}
 }
 
-// stateObjects は Build() と完全に同一の経路で state hash 用の client.Object 群を返します。
-// Build() が outputs[0] のみを対象とし、stdout 出力では空を返すのと挙動を揃えます。
-func (g *GenesisSecret) stateObjects(items map[string]string, genesisSecret v1.GenesisSecret) ([]client.Object, error) {
-	if len(genesisSecret.Spec.Outputs) == 0 {
-		return nil, nil
+// renderKubernetesSecretOutputs は全 outputs のうち kubernetesSecret 出力を
+// multi-document YAML として render します。stdout 出力にはクラスタリソースが
+// 対応しないためスキップされます。Build() と stateObjects() の双方がこの関数を
+// 使うことで、state hash の整合性を保ちます。
+func renderKubernetesSecretOutputs(genesisSecret v1.GenesisSecret, items map[string]string) (string, error) {
+	docs := make([]string, 0, len(genesisSecret.Spec.Outputs))
+	for _, o := range genesisSecret.Spec.Outputs {
+		kind, err := classifyOutput(o)
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		if kind != "kubernetesSecret" {
+			continue
+		}
+
+		secret := newSecretForOutput(o, items)
+		out, err := yaml.Marshal(secret)
+		if err != nil {
+			return "", errors.WithStack(err)
+		}
+		docs = append(docs, string(out))
 	}
-	o := genesisSecret.Spec.Outputs[0]
-	kind, err := classifyOutput(o)
+	return strings.Join(docs, "---\n"), nil
+}
+
+// stateObjects は Build() と完全に同一の経路で state hash 用の client.Object 群を返します。
+// stdout 出力のみの場合は空を返します。
+func (g *GenesisSecret) stateObjects(items map[string]string, genesisSecret v1.GenesisSecret) ([]client.Object, error) {
+	out, err := renderKubernetesSecretOutputs(genesisSecret, items)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
-	if kind != "kubernetesSecret" {
+	if out == "" {
 		// stdout 出力にはクラスタリソースが対応しないため state object も無し。
 		return nil, nil
 	}
-
-	secret := newSecretForOutput(o, items)
-	out, err := yaml.Marshal(secret)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
 	// getDefaultNamespace(genesissecret) は "" を返すため、namespace は補完しない。
-	return manifest.ConvertManifestsToObjects(out, "")
+	return manifest.ConvertManifestsToObjects([]byte(out), "")
 }
 
 // newSecretForOutput は KubernetesSecret 出力から corev1.Secret を構築します。
@@ -262,20 +278,8 @@ func (g *GenesisSecret) Destroy(ctx context.Context, logger *slog.Logger, m v1.M
 		return errors.WithStack(err)
 	}
 
-	provider, err := g.resolveProvider(genesisSecret.Spec.Provider)
-	if err != nil {
-		return errors.WithStack(err)
-	}
-
-	items := map[string]string{}
-	for _, s := range genesisSecret.Spec.Secrets {
-		i, err := provider.Fetch(ctx, s)
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		items = merge(items, i)
-	}
-
+	// Destroy は Secret を削除するだけで秘匿情報の値を必要としないため、
+	// provider からの Fetch は行わない (1Password 不達時でも destroy できる)。
 	for _, o := range genesisSecret.Spec.Outputs {
 		kind, err := classifyOutput(o)
 		if err != nil {
@@ -347,28 +351,10 @@ func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Man
 	if len(genesisSecret.Spec.Outputs) == 0 {
 		return "", fmt.Errorf("no outputs defined")
 	}
-	o := genesisSecret.Spec.Outputs[0]
-	kind, err := classifyOutput(o)
-	if err != nil {
-		return "", errors.WithStack(err)
-	}
 
-	switch kind {
-	case "stdout":
-		// stdout 出力にはクラスタリソースが対応しないため Build は空文字を返す。
-		// これにより state save 経路でも 0 entries となり state が書き込まれない。
-		return "", nil
-	case "kubernetesSecret":
-		secret := newSecretForOutput(o, items)
-
-		out, err := yaml.Marshal(secret)
-		if err != nil {
-			return "", errors.WithStack(err)
-		}
-
-		return string(out), nil
-	}
-	return "", fmt.Errorf("unsupported output kind: %s", kind)
+	// 全 kubernetesSecret outputs を render する。stdout 出力のみの場合は
+	// 空文字を返し、state save 経路でも 0 entries となり state が書き込まれない。
+	return renderKubernetesSecretOutputs(genesisSecret, items)
 }
 
 func merge(m1, m2 map[string]string) map[string]string {

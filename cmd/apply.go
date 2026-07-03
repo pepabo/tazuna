@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	"context"
 	"path/filepath"
 
 	"github.com/cockroachdb/errors"
 	"github.com/pepabo/tazuna/cmd/internal/cliutil"
-	tazunacontext "github.com/pepabo/tazuna/pkg/context"
+	"github.com/pepabo/tazuna/pkg/kubecontext"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/runner"
 	"github.com/pepabo/tazuna/pkg/validator"
@@ -56,7 +55,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		defer func() { _ = shutdownTracer(context.Background()) }()
+		defer cliutil.ShutdownTracerWithWarn(shutdownTracer)
 
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
@@ -134,7 +133,7 @@ Examples:
 			return err
 		}
 		if len(contextMatches) > 0 {
-			if err := tazunacontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
+			if err := kubecontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
 				return err
 			}
 		}

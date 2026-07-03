@@ -15,6 +15,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/errgroup"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -108,13 +109,11 @@ type statusRow struct {
 }
 
 // collectStatusRows は state の各 Entry についてライブクラスタから状況を取得し、
-// 表示用の行データを構築する。
+// 表示用の行データを構築する。ライブ GET は read-only なので errgroup で並列化する。
 func (t *TazunaRunner) collectStatusRows(
 	ctx context.Context,
 	data *state.StateData,
 ) ([]statusRow, error) {
-	rows := make([]statusRow, 0, len(data.Entries))
-
 	// 安定した出力のために state key でソートする
 	keys := make([]string, 0, len(data.Entries))
 	for k := range data.Entries {
@@ -122,56 +121,78 @@ func (t *TazunaRunner) collectStatusRows(
 	}
 	sort.Strings(keys)
 
-	for _, keyStr := range keys {
-		parsed, err := state.ParseStateKey(keyStr)
-		if err != nil {
-			t.logger.WarnContext(ctx, "failed to parse state key, skipping",
-				slog.String("key", keyStr),
-				slog.String("error", err.Error()))
-			continue
-		}
+	results := make([]*statusRow, len(keys))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(liveGetConcurrency)
+	for i, keyStr := range keys {
+		g.Go(func() error {
+			results[i] = t.collectStatusRow(gctx, keyStr)
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
 
-		obj, err := buildUnstructuredFromStateKey(keyStr)
-		if err != nil {
-			t.logger.WarnContext(ctx, "failed to build unstructured from state key, skipping",
-				slog.String("key", keyStr),
-				slog.String("error", err.Error()))
-			continue
+	rows := make([]statusRow, 0, len(keys))
+	for _, row := range results {
+		if row != nil {
+			rows = append(rows, *row)
 		}
-
-		row := statusRow{
-			Kind:      parsed.Kind,
-			Namespace: parsed.Namespace,
-			Name:      parsed.Name,
-		}
-
-		getErr := t.k8sClient.Get(ctx, client.ObjectKey{Namespace: parsed.Namespace, Name: parsed.Name}, obj)
-		switch {
-		case getErr == nil:
-			ready, rerr := resource.IsReady(obj)
-			if rerr != nil {
-				t.logger.WarnContext(ctx, "failed to determine readiness, marking as Error",
-					slog.String("key", keyStr),
-					slog.String("error", rerr.Error()))
-				row.Status = ResourceStatusError
-			} else if ready {
-				row.Status = ResourceStatusReady
-			} else {
-				row.Status = ResourceStatusNotReady
-			}
-		case apierrors.IsNotFound(getErr):
-			row.Status = ResourceStatusMissing
-		default:
-			t.logger.WarnContext(ctx, "failed to get live resource, marking as Error",
-				slog.String("key", keyStr),
-				slog.String("error", getErr.Error()))
-			row.Status = ResourceStatusError
-		}
-
-		rows = append(rows, row)
 	}
 
 	return rows, nil
+}
+
+// collectStatusRow は 1 つの state key についてライブクラスタから状況を取得する。
+// state key がパースできない場合は警告を出して nil を返す。
+func (t *TazunaRunner) collectStatusRow(ctx context.Context, keyStr string) *statusRow {
+	parsed, err := state.ParseStateKey(keyStr)
+	if err != nil {
+		t.logger.WarnContext(ctx, "failed to parse state key, skipping",
+			slog.String("key", keyStr),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	obj, err := buildUnstructuredFromStateKey(keyStr)
+	if err != nil {
+		t.logger.WarnContext(ctx, "failed to build unstructured from state key, skipping",
+			slog.String("key", keyStr),
+			slog.String("error", err.Error()))
+		return nil
+	}
+
+	row := &statusRow{
+		Kind:      parsed.Kind,
+		Namespace: parsed.Namespace,
+		Name:      parsed.Name,
+	}
+
+	getErr := t.k8sClient.Get(ctx, client.ObjectKey{Namespace: parsed.Namespace, Name: parsed.Name}, obj)
+	switch {
+	case getErr == nil:
+		ready, rerr := resource.IsReady(obj)
+		if rerr != nil {
+			t.logger.WarnContext(ctx, "failed to determine readiness, marking as Error",
+				slog.String("key", keyStr),
+				slog.String("error", rerr.Error()))
+			row.Status = ResourceStatusError
+		} else if ready {
+			row.Status = ResourceStatusReady
+		} else {
+			row.Status = ResourceStatusNotReady
+		}
+	case apierrors.IsNotFound(getErr):
+		row.Status = ResourceStatusMissing
+	default:
+		t.logger.WarnContext(ctx, "failed to get live resource, marking as Error",
+			slog.String("key", keyStr),
+			slog.String("error", getErr.Error()))
+		row.Status = ResourceStatusError
+	}
+
+	return row
 }
 
 // writeStatusRows は statusRow 群を整形して w に書き出す。

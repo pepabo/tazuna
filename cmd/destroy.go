@@ -1,14 +1,13 @@
 package cmd
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/cockroachdb/errors"
 	"github.com/pepabo/tazuna/cmd/internal/cliutil"
-	tazunacontext "github.com/pepabo/tazuna/pkg/context"
+	"github.com/pepabo/tazuna/pkg/kubecontext"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/prompt"
 	"github.com/pepabo/tazuna/pkg/runner"
@@ -38,7 +37,7 @@ Examples:
 		if err != nil {
 			return err
 		}
-		defer func() { _ = shutdownTracer(context.Background()) }()
+		defer cliutil.ShutdownTracerWithWarn(shutdownTracer)
 
 		path, err := cmd.Flags().GetString("file-path")
 		if err != nil {
@@ -77,12 +76,18 @@ Examples:
 			return err
 		}
 		if len(contextMatches) > 0 {
-			if err := tazunacontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
+			if err := kubecontext.ValidateCurrentContext(contextMatches, contextMatchMode); err != nil {
 				return err
 			}
 		}
 
-		if v, err := cmd.Flags().GetBool("force"); err == nil && !v {
+		// 確認ガード: GetBool のエラーを握り潰すと確認プロンプトなしで destroy に
+		// 進む fail-open になるため、エラーは必ず返す。
+		force, err := cmd.Flags().GetBool("force")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		if !force {
 			ok, err := prompt.YesORNo(os.Stdin, "!!! All resources managed by Tazuna will be deleted !!!\nAre you sure you want to delete them?")
 			if err != nil {
 				return errors.WithStack(err)

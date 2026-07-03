@@ -17,7 +17,8 @@ func TestYesORNo(t *testing.T) {
 	}{
 		{"lowercase y", "y\n", true, false},
 		{"uppercase Y", "Y\n", true, false},
-		{"empty (default yes)", "\n", true, false},
+		{"empty (default no)", "\n", false, false},
+		{"word yes", "yes\n", true, false},
 		{"lowercase n", "n\n", false, false},
 		{"uppercase N", "N\n", false, false},
 		{"word no", "no\n", false, false},

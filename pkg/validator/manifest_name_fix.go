@@ -10,9 +10,14 @@ import (
 
 // FixManifestNames はname未設定のmanifestに対してtypeとpathから名前を自動付与する。
 // 既存の名前との重複を回避するためにサフィックスを付与する。
+// includesを持つmanifestは展開時にinclude先のmanifest群へ置換されるため、
+// 名前付与の対象外とする。
 func FixManifestNames(manifests []v1.Manifest) {
 	usedNames := collectExistingNames(manifests)
 	for i := range manifests {
+		if len(manifests[i].Includes) > 0 {
+			continue
+		}
 		if manifests[i].Name == "" {
 			name := generateName(manifests[i])
 			name = ensureUnique(name, usedNames)
@@ -61,12 +66,18 @@ func extractDirName(path string) string {
 		return ""
 	}
 
-	// 名前に使えない文字を置換
+	// 名前に使えない文字を置換する。manifest名はDNS-1123相当
+	// (小文字英数と '-') に制限されるため、大文字は小文字化し
+	// '_' などその他の文字は '-' に置き換える。
 	name := strings.Map(func(r rune) rune {
-		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-':
 			return r
+		case r >= 'A' && r <= 'Z':
+			return r + ('a' - 'A')
+		default:
+			return '-'
 		}
-		return '-'
 	}, base)
 
 	return strings.Trim(name, "-")

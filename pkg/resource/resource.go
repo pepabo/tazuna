@@ -96,8 +96,20 @@ func recreateImmutableObject(ctx context.Context, c client.Client, obj client.Ob
 	return errors.WithStack(err)
 }
 
+// deletionTimeout は WaitForDeletion の上限タイムアウト。
+// finalizer が詰まったリソースがあっても apply が無期限にハングしないようにする。
+const deletionTimeout = 5 * time.Minute
+
 // WaitForDeletion はリソースが削除されるまでポーリングして待機する。
+// 上限タイムアウト (5 分) を超えるとエラーを返す。
 func WaitForDeletion(ctx context.Context, c client.Client, obj client.Object) error {
+	return waitForDeletion(ctx, c, obj, deletionTimeout)
+}
+
+func waitForDeletion(ctx context.Context, c client.Client, obj client.Object, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
 	key := types.NamespacedName{
 		Namespace: obj.GetNamespace(),
 		Name:      obj.GetName(),
@@ -111,7 +123,8 @@ func WaitForDeletion(ctx context.Context, c client.Client, obj client.Object) er
 	for {
 		select {
 		case <-ctx.Done():
-			return errors.WithStack(ctx.Err())
+			return errors.Wrapf(ctx.Err(), "giving up waiting for deletion of %s/%s (a stuck finalizer may be blocking it)",
+				obj.GetNamespace(), obj.GetName())
 		case <-ticker.C:
 			err := c.Get(ctx, key, dummy)
 			if apierrors.IsNotFound(err) {
