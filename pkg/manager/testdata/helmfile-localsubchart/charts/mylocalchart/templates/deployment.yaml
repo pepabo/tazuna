@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mylocalchart-nginx
+  namespace: default
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: mylocalchart-nginx
+  template:
+    metadata:
+      labels:
+        app: mylocalchart-nginx
+        label-from-static: {{ .Values.labelFromStatic | quote }}
+        label-from-op: {{ .Values.labelFromOp | quote }}
+        {{- if and (index .Values "mylocalchart-nginx") (index .Values "mylocalchart-nginx" "extraLabel") }}
+        extra-label: {{ index .Values "mylocalchart-nginx" "extraLabel" | quote }}
+        {{- end }}
+    spec:
+      containers:
+        - name: nginx
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: 80

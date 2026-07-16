@@ -309,6 +309,50 @@ func TestHelmfile_Build_OCIChart(t *testing.T) {
 	assert.Contains(t, out, "karpenter")
 }
 
+// TestHelmfile_Build_HTTPRepoChart は repositories[] で宣言した HTTP(S) repository の
+// `<alias>/<chart>` 参照が index.yaml 経由で pull され、render できることを検証する。
+// 報告のあった argo-cd (https://argoproj.github.io/argo-helm) の構成を再現する。
+// public HTTP repository への network access を要するため integration タグ下でのみ実行する。
+func TestHelmfile_Build_HTTPRepoChart(t *testing.T) {
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-http-repo/helmfile.yaml",
+		Helmfile: &v1.ManifestHelmfile{
+			// argo-cd チャートは kubeVersion >=1.25.0 を要求するため明示的に指定する
+			// (helm のデフォルト v1.20.0 では render に失敗する)。
+			KubeVersion: "1.30.0",
+		},
+	}
+
+	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.NoError(t, err)
+	// argo-cd チャートは各種 Deployment を含むため、render 結果に現れる。
+	assert.Contains(t, out, "kind: Deployment")
+	assert.Contains(t, out, "argocd")
+}
+
+// TestHelmfile_Build_OCIRepoChart は repositories[] で宣言した OCI repository の
+// `<alias>/<chart>` 参照が helm registry client 経由で pull され、render できることを
+// 検証する。public ECR への network access を要するため integration タグ下でのみ実行する。
+func TestHelmfile_Build_OCIRepoChart(t *testing.T) {
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-oci-repo/helmfile.yaml",
+		Helmfile: &v1.ManifestHelmfile{
+			IncludeCRDs: true,
+		},
+	}
+
+	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.NoError(t, err)
+	assert.Contains(t, out, "kind: CustomResourceDefinition")
+	assert.Contains(t, out, "karpenter")
+}
+
 func stringPtr(s string) *string {
 	return &s
 }

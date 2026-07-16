@@ -1,0 +1,9 @@
+# `<seg>/<seg>` 形式だが repositories に宣言のない chart 参照が、
+# 従来どおり baseDir 起点のローカルパスとして解決されることを検証するための helmfile。
+releases:
+  - name: mylocalrelease
+    namespace: default
+    chart: charts/mylocalchart
+    version: 0.1.0
+    values:
+      - charts/mylocalchart/values.yaml
