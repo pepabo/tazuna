@@ -8,8 +8,8 @@ artifact の中身そのものは helmfile / kustomize と同じ作法で書き�
 
 ## `path`
 
-ORAS Manifest の `manifests[].path` は **実体としては使用されません**。
-バリデーション都合で空にはできないため、何かしらのディレクトリを書きます。
+ORAS Manifest の `manifests[].path` は **実体としては使用されず、指定も不要** です。
+他の Manifest type と異なり、ORAS では `path` を省略できます（書いても無視されます）。
 
 委譲先 Manager に渡される `path` は、pull 後にローカルへ展開された
 キャッシュディレクトリ（必要なら `target` でサブパスへ降りたもの）になります。
@@ -126,7 +126,7 @@ tag 指定 + helmfile 委譲:
 manifests:
   - name: cert-manager
     type: oras
-    path: ./oras/cert-manager   # 実体としては使われないが必須
+    # path は不要（ORAS では省略可能）
     oras:
       reference: ghcr.io/example/cert-manager-helmfile:v1.14.0
       delegate:
@@ -142,7 +142,6 @@ digest 指定 + kustomize 委譲 + サブパス:
 manifests:
   - name: ingress-nginx
     type: oras
-    path: ./oras/ingress-nginx
     oras:
       reference: registry.example.com/platform/ingress-bundle@sha256:abc123...
       target: kustomize/ingress-nginx
