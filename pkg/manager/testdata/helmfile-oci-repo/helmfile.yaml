@@ -1,0 +1,11 @@
+# OCI helm repository の `<alias>/<chart>` 参照を検証するための helmfile。
+# 安定して存在する public ECR の karpenter-crd を repository alias 経由で pull する。
+repositories:
+  - name: karpenter
+    url: oci://public.ecr.aws/karpenter
+
+releases:
+  - name: karpenter-crd
+    namespace: karpenter
+    chart: karpenter/karpenter-crd
+    version: 1.5.6
