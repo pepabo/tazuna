@@ -130,14 +130,16 @@ func ValidateManifest(manifest *v1.Manifest, basePath string) error {
 		return ValidateManifestWithIncludes(manifest, basePath)
 	}
 
-	// パスの必須チェック
-	if manifest.Path == "" {
-		return errors.New("manifest path is required")
-	}
-
 	// タイプの必須チェック
 	if manifest.Type == "" {
 		return errors.New("manifest type is required")
+	}
+
+	// パスの必須チェック
+	// ORAS のように pull した artifact のローカルパスから path を導出する manager は
+	// tazuna.yaml 側での path 指定を必要としないため、必須チェックの対象外とする。
+	if manifestTypeRequiresPath(manifest.Type) && manifest.Path == "" {
+		return errors.New("manifest path is required")
 	}
 
 	// タイプ別のバリデーション
@@ -161,6 +163,13 @@ func ValidateManifest(manifest *v1.Manifest, basePath string) error {
 	}
 
 	return nil
+}
+
+// manifestTypeRequiresPath は指定された manifest type が path フィールドを
+// 必須とするかどうかを返します。ORAS manager は pull した artifact の
+// ローカルパスから path を導出するため path 指定を必要としません。
+func manifestTypeRequiresPath(t v1.ManifestType) bool {
+	return t != v1.ManifestTypeORAS
 }
 
 // ValidateManifestHelmfile は ManifestHelmfile をバリデーションします

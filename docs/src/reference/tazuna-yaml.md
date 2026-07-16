@@ -210,7 +210,8 @@ $ tazuna apply -e production
 | `tests`         | [TestPluginSpec]                  | -    | `[]`       | この Manifest の apply 後に実行される Test plugin の配列。 |
 
 (※) `includes` を指定するときは `type` / `path` は不要。
-それ以外のときは `type` と `path` が必須です。
+それ以外のときは `type` が必須で、`path` も原則必須です。
+ただし `type: oras` の場合は `path` を使わないため不要です。
 
 ### `name`
 
@@ -230,7 +231,8 @@ $ tazuna apply -e production
 
 ### `path`
 
-- `includes` を使わないときは必須。
+- `includes` を使わず、かつ `type: oras` 以外のときは必須。
+  `type: oras` は `path` を使わないため省略できます。
 - **`tazuna.yaml` 自身の置かれているディレクトリ起点** の相対パスとして解釈されます。
   コマンドを実行した cwd 起点ではありません。
 - `tazuna check` の時点で実在チェックが行われます。
@@ -241,7 +243,7 @@ $ tazuna apply -e production
 | `kustomize`     | `kustomization.yaml` を含むディレクトリ |
 | `helmfile`      | `helmfile.yaml` を含むディレクトリ |
 | `genesissecret` | GenesisSecret 定義 YAML **ファイル**（ディレクトリではない） |
-| `oras`          | 実体としては使用されません。バリデーション都合で空にはできないため、適当なディレクトリを書きます。 |
+| `oras`          | 実体としては使用されないため **指定不要**（省略可能）。 |
 
 詳細な解釈は各 [Manifest type 別ページ](./manifest-types/index.md) を参照してください。
 
@@ -381,10 +383,11 @@ spec:
   tazuna のバージョンがそれ以上であること（ローカルビルドは比較をスキップ）。なお
   この検証は `check` に限らず、`tazuna.yaml` を読み込むすべての操作で実行されます。
 - `spec.manifests[]` の各要素について:
-  - `includes` が無い場合: `path` と `type` が設定されていること。
+  - `includes` が無い場合: `type` が設定されていること。`path` は
+    `type: oras` 以外で設定されていること（`oras` は `path` 不要）。
   - `type` が既知の値（`kustomize` / `helmfile` / `genesissecret` /
     `oras`）であること。
-  - `path` の指す場所が実在すること。
+  - `path` の指す場所が実在すること（`type: oras` を除く）。
 - `spec.manifests[].name` が必須・使用可能文字・ユニーク・予約語禁止を満たすこと。
 - `spec.manifests[].dependsOn` が既存 Manifest 名のみを参照し、自己参照・循環依存を含まないこと。
 - `spec.context_matches` が正規表現としてコンパイル可能であること。
