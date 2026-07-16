@@ -243,6 +243,32 @@ func TestValidateManifest(t *testing.T) {
 			errMsg:    "manifest path is required",
 		},
 		{
+			name: "valid oras manifest without path",
+			manifest: &v1.Manifest{
+				Type: v1.ManifestTypeORAS,
+				ORAS: &v1.ManifestORAS{
+					Reference: "ghcr.io/example/foo:v1.0.0",
+					Delegate: v1.ORASDelegate{
+						Type: v1.ORASDelegateTypeKustomize,
+					},
+				},
+			},
+			expectErr: false,
+		},
+		{
+			name: "oras manifest missing reference",
+			manifest: &v1.Manifest{
+				Type: v1.ManifestTypeORAS,
+				ORAS: &v1.ManifestORAS{
+					Delegate: v1.ORASDelegate{
+						Type: v1.ORASDelegateTypeKustomize,
+					},
+				},
+			},
+			expectErr: true,
+			errMsg:    "oras.reference is required",
+		},
+		{
 			name: "missing type",
 			manifest: &v1.Manifest{
 				Path: "/path/to/manifest",
