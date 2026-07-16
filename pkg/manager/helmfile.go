@@ -46,11 +46,10 @@ import (
 // は以下のサブセットです (差分は docs/src/reference/manifest-types/helmfile.md を参照):
 //   - repositories[].{name,url,username,password,oci}
 //   - releases[].{name,namespace,chart,version,values}
-//   - chart は次のいずれか:
-//       - ローカルチャートへの相対パス
-//       - oci:// で始まる OCI チャート参照 (version 指定、helm registry client 経由で pull)
-//       - <alias>/<chart> 形式 (alias が repositories[] に宣言されていれば、その url
-//         (HTTP(S) or OCI) から version の chart を pull する。未宣言ならローカルパス扱い)
+//   - chart はローカルチャートへの相対パス、oci:// で始まる OCI チャート参照、または
+//     <alias>/<chart> 形式のいずれか。<alias>/<chart> 形式は alias が repositories[] に
+//     宣言されていれば、その url (HTTP(S) or OCI) から version の chart を pull する
+//     (未宣言ならローカルパス扱い)。OCI は helm registry client 経由で pull する。
 //   - values[] はファイルパス文字列、またはインライン map
 //   - helmfile.yaml 自体の Go テンプレート (.StateValues / .Values) と sprig 関数
 type Helmfile struct {
