@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -43,10 +44,12 @@ import (
 //
 // インスピレーション元として helmfile をクレジットします。本実装が解釈する helmfile.yaml
 // は以下のサブセットです (差分は docs/src/reference/manifest-types/helmfile.md を参照):
+//   - repositories[].{name,url,username,password,oci}
 //   - releases[].{name,namespace,chart,version,values}
-//   - chart はローカルチャートへの相対パス、または oci:// で始まる OCI チャート参照。
-//     OCI の場合は version を指定し、helm registry client 経由で pull する
-//     (http(s) repository chart は未サポート)。
+//   - chart はローカルチャートへの相対パス、oci:// で始まる OCI チャート参照、または
+//     <alias>/<chart> 形式のいずれか。<alias>/<chart> 形式は alias が repositories[] に
+//     宣言されていれば、その url (HTTP(S) or OCI) から version の chart を pull する
+//     (未宣言ならローカルパス扱い)。OCI は helm registry client 経由で pull する。
 //   - values[] はファイルパス文字列、またはインライン map
 //   - helmfile.yaml 自体の Go テンプレート (.StateValues / .Values) と sprig 関数
 type Helmfile struct {
@@ -309,6 +312,13 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 
 	baseDir := filepath.Dir(helmfilePath)
 
+	// repositories[] を alias→repository の map に変換する。release の chart が
+	// `<alias>/<chart>` 形式のときにリモート chart として解決するために使う。
+	repos := make(map[string]helmfileRepository, len(spec.Repositories))
+	for _, r := range spec.Repositories {
+		repos[r.Name] = r
+	}
+
 	// ExtraValueFiles は release 間で共通のため、release ごとに再読込せず
 	// 一度だけ読み込んで共有する。
 	extraValues := map[string]any{}
@@ -321,9 +331,11 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	}
 
 	// OCI chart 用の registry client は release ごとに生成せず共有する。
+	// chart: oci://... の直接参照に加え、repositories[] で宣言された OCI repository の
+	// `<alias>/<chart>` 参照も対象にする。
 	var registryClient *registry.Client
 	for i := range spec.Releases {
-		if registry.IsOCI(spec.Releases[i].Chart) {
+		if releaseNeedsOCI(&spec.Releases[i], repos) {
 			rc, err := registry.NewClient()
 			if err != nil {
 				return "", errors.Wrap(err, "failed to create helm registry client")
@@ -340,7 +352,7 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	for i := range spec.Releases {
 		g.Go(func() error {
 			rel := &spec.Releases[i]
-			out, err := h.renderRelease(baseDir, rel, m.Helmfile, extraValues, registryClient)
+			out, err := h.renderRelease(baseDir, rel, m.Helmfile, extraValues, repos, registryClient)
 			if err != nil {
 				return errors.Wrapf(err, "failed to render release %q", rel.Name)
 			}
@@ -396,7 +408,22 @@ func resolveHelmfilePath(path string) (string, error) {
 
 // helmfileSpec は解釈可能な helmfile.yaml のサブセットです。
 type helmfileSpec struct {
-	Releases []helmfileRelease `json:"releases"`
+	Repositories []helmfileRepository `json:"repositories"`
+	Releases     []helmfileRelease    `json:"releases"`
+}
+
+// helmfileRepository は helmfile.yaml の repositories[] エントリ (サブセット) です。
+// release の chart が `<name>/<chart>` 形式のとき、name に一致する repository の
+// url から chart を pull します。HTTP(S) と OCI (oci:// もしくは oci: true) の
+// 双方に対応します。
+type helmfileRepository struct {
+	Name     string `json:"name"`
+	URL      string `json:"url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	// OCI は url が oci スキームでない場合でも OCI registry として扱うためのフラグです
+	// (helmfile 互換)。url が oci:// で始まる場合は自動的に OCI と判定します。
+	OCI bool `json:"oci"`
 }
 
 // helmfileRelease は 1 つの helm release 宣言です。
@@ -410,9 +437,10 @@ type helmfileRelease struct {
 }
 
 // renderRelease は 1 release を helm の ClientOnly + DryRun install で render します。
-// extraValues は release 間で共有される追加 values (読み込み済み)、registryClient は
-// OCI chart 用の共有 client (OCI chart がない場合は nil)。
-func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile, extraValues map[string]any, registryClient *registry.Client) (string, error) {
+// extraValues は release 間で共有される追加 values (読み込み済み)、repos は
+// repositories[] の alias→repository map、registryClient は OCI chart 用の共有 client
+// (OCI chart がない場合は nil)。
+func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile, extraValues map[string]any, repos map[string]helmfileRepository, registryClient *registry.Client) (string, error) {
 	if rel.Chart == "" {
 		return "", errors.Errorf("release %q has no chart", rel.Name)
 	}
@@ -420,10 +448,11 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	actionCfg := new(action.Configuration)
 	actionCfg.Log = func(string, ...any) {}
 
-	// OCI チャート (chart: oci://...) は helm registry client 経由で pull する必要が
-	// あるため、actionCfg.RegistryClient を NewInstall 前に設定しておく
-	// (action.NewInstall が ChartPathOptions.registryClient にコピーする)。
-	if registry.IsOCI(rel.Chart) {
+	// OCI チャート (chart: oci://... もしくは OCI repository の <alias>/<chart>) は
+	// helm registry client 経由で pull する必要があるため、actionCfg.RegistryClient を
+	// NewInstall 前に設定しておく (action.NewInstall が ChartPathOptions.registryClient に
+	// コピーする)。
+	if releaseNeedsOCI(rel, repos) {
 		if registryClient == nil {
 			return "", errors.Errorf("release %q references an OCI chart but no registry client is available", rel.Name)
 		}
@@ -448,7 +477,7 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 		inst.KubeVersion = kv
 	}
 
-	chartPath, err := h.resolveChartPath(inst, baseDir, rel.Chart)
+	chartPath, err := h.resolveChartPath(inst, baseDir, rel.Chart, repos, registryClient)
 	if err != nil {
 		return "", errors.WithStack(err)
 	}
@@ -481,8 +510,10 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 
 // resolveChartPath は chart 参照をローカルの chart パス (ディレクトリ or .tgz) に解決します。
 //   - oci://... の場合は helm registry client で pull し、cache 上の .tgz パスを返す。
+//   - `<alias>/<chart>` 形式で alias が repositories[] に宣言されている場合は、その
+//     repository (HTTP(S) or OCI) から chart を pull し、cache 上の .tgz パスを返す。
 //   - それ以外はローカル chart とみなし、相対パスは baseDir 起点で解決する (従来挙動)。
-func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef string) (string, error) {
+func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef string, repos map[string]helmfileRepository, registryClient *registry.Client) (string, error) {
 	if registry.IsOCI(chartRef) {
 		// LocateChart は OCI 参照を pull し、HELM_REPOSITORY_CACHE 配下の
 		// .tgz への絶対パスを返す。version は inst.ChartPathOptions.Version を参照する。
@@ -493,11 +524,88 @@ func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef stri
 		return cp, nil
 	}
 
+	// `<alias>/<chart>` 形式で alias が repositories[] に宣言されていれば、
+	// リモート repository から pull する。宣言がなければローカルパスとして扱う
+	// (後方互換: 既存のローカル chart 相対パスを壊さない)。
+	if alias, chartName, ok := splitRepoAlias(chartRef); ok {
+		if repo, found := repos[alias]; found {
+			return h.resolveRepoChart(inst, repo, chartName, registryClient)
+		}
+	}
+
 	chartPath := chartRef
 	if !filepath.IsAbs(chartPath) {
 		chartPath = filepath.Join(baseDir, chartPath)
 	}
 	return chartPath, nil
+}
+
+// resolveRepoChart は repositories[] で宣言された HTTP(S) / OCI repository から
+// chartName を pull し、ローカルの .tgz への絶対パスを返します。
+func (h *Helmfile) resolveRepoChart(inst *action.Install, repo helmfileRepository, chartName string, registryClient *registry.Client) (string, error) {
+	if repositoryIsOCI(repo) {
+		if registryClient == nil {
+			return "", errors.Errorf("repository %q is an OCI registry but no registry client is available", repo.Name)
+		}
+		ref := ociChartRef(repo.URL, chartName)
+		cp, err := inst.LocateChart(ref, cli.New())
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to pull oci chart %s from repository %q", chartName, repo.Name)
+		}
+		return cp, nil
+	}
+
+	// HTTP(S) repository: RepoURL をセットすると LocateChart が index.yaml を取得して
+	// chart を download する (helm repo add 相当を実行時に行う)。
+	inst.RepoURL = repo.URL
+	inst.Username = repo.Username
+	inst.Password = repo.Password
+	cp, err := inst.LocateChart(chartName, cli.New())
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to pull chart %s from repository %q (%s)", chartName, repo.Name, repo.URL)
+	}
+	return cp, nil
+}
+
+// releaseNeedsOCI は release の chart が OCI registry 経由の pull を要するかを返します。
+// chart: oci://... の直接参照、または OCI repository の `<alias>/<chart>` 参照が該当します。
+func releaseNeedsOCI(rel *helmfileRelease, repos map[string]helmfileRepository) bool {
+	if registry.IsOCI(rel.Chart) {
+		return true
+	}
+	if alias, _, ok := splitRepoAlias(rel.Chart); ok {
+		if repo, found := repos[alias]; found && repositoryIsOCI(repo) {
+			return true
+		}
+	}
+	return false
+}
+
+// splitRepoAlias は chart 参照が `<alias>/<chart>` 形式かを判定し、alias と chart 名を
+// 返します。oci:// などのスキーム付き参照、絶対パス、"." 始まりの明示的なローカルパス、
+// および chart 名に "/" を含む深いローカルパスは対象外とします (ok=false)。
+func splitRepoAlias(chartRef string) (alias, chart string, ok bool) {
+	if strings.Contains(chartRef, "://") || filepath.IsAbs(chartRef) || strings.HasPrefix(chartRef, ".") {
+		return "", "", false
+	}
+	alias, chart, found := strings.Cut(chartRef, "/")
+	if !found || alias == "" || chart == "" || strings.Contains(chart, "/") {
+		return "", "", false
+	}
+	return alias, chart, true
+}
+
+// repositoryIsOCI は repository が OCI registry かを返します。
+func repositoryIsOCI(repo helmfileRepository) bool {
+	return repo.OCI || registry.IsOCI(repo.URL)
+}
+
+// ociChartRef は repository の url と chart 名から oci:// 参照を組み立てます。
+// url が oci:// で始まらない場合 (oci: true 指定時) も oci:// を前置します。
+func ociChartRef(repoURL, chartName string) string {
+	base := strings.TrimSuffix(repoURL, "/")
+	base = strings.TrimPrefix(base, "oci://")
+	return "oci://" + base + "/" + chartName
 }
 
 // helmfileTemplateFuncs は helmfile render 用の sprig FuncMap を返します。

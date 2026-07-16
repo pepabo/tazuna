@@ -37,6 +37,23 @@ func TestHelmfile_Build_EnvironmentName(t *testing.T) {
 	})
 }
 
+// TestHelmfile_Build_LocalSubchartPath は `<seg>/<seg>` 形式でも repositories に
+// 宣言のない chart 参照は従来どおり baseDir 起点のローカルパスとして解決されることを
+// 確認する (リモート repository 対応追加によるデグレ防止)。
+func TestHelmfile_Build_LocalSubchartPath(t *testing.T) {
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-localsubchart/helmfile.yaml",
+	}
+
+	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.NoError(t, err)
+	assert.Contains(t, out, "kind: Deployment")
+	assert.Contains(t, out, "mylocalchart-nginx")
+}
+
 // TestHelmfile_Build_RejectsEnvFunction は helmfile テンプレートで sprig の
 // env / expandenv が使えないことを確認する。ORAS 経由で取得したリモートの
 // helmfile が実行者の環境変数を窃取するのを防ぐためのガード。

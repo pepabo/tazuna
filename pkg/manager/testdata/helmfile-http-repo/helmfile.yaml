@@ -1,0 +1,11 @@
+# HTTP(S) helm repository の `<alias>/<chart>` 参照を検証するための helmfile。
+# 報告のあった argo-cd (https://argoproj.github.io/argo-helm) の構成を再現する。
+repositories:
+  - name: argo-cd
+    url: https://argoproj.github.io/argo-helm
+
+releases:
+  - name: argo-cd
+    namespace: argocd
+    chart: argo-cd/argo-cd
+    version: 9.0.5
