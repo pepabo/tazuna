@@ -33,11 +33,18 @@
 以下の `helmfile.yaml` の構造を解釈します。
 
 ```yaml
+repositories:                   # 省略可。chart を <alias>/<chart> 形式で参照する場合に宣言する
+  - name: <alias>
+    url: <リポジトリ URL>        # https://... もしくは oci://...
+    # username: <basic 認証ユーザ>  # 省略可 (HTTP(S) リポジトリのみ)
+    # password: <basic 認証パスワード>
+    # oci: true                    # url が oci:// でない registry を OCI 扱いにする場合
+
 releases:
   - name: <release 名>
     namespace: <namespace>      # 省略時は defaultNamespace で補完
-    chart: <ローカルチャートへの相対パス>
-    version: <バージョン>        # ローカルチャートでは情報用
+    chart: <chart 参照>          # 下記のいずれか
+    version: <バージョン>        # リモート chart では必須、ローカルチャートでは情報用
     values:
       - <value ファイルへの相対パス>
       - <インラインの値 (map)>
@@ -49,12 +56,20 @@ releases:
   ただし `env` / `expandenv` は使えません (ORAS 経由で取得したリモートの
   helmfile が実行者の環境変数を読み取るのを防ぐため)。環境変数は
   [`vars`](#vars) の `from: env` で明示的に渡してください。
-- `chart` は **ローカルチャートへの相対パス** のみ対応します
-  (リモートリポジトリの chart はサポートしません)。
+- `chart` は次の 3 形式に対応します。
+  - **ローカルチャートへの相対パス** (例: `./mychart`、`charts/mychart`)。
+    相対パスは `helmfile.yaml` のあるディレクトリ起点で解決します。
+  - **OCI チャート参照** (例: `oci://public.ecr.aws/karpenter/karpenter-crd`)。
+    `version` を指定し、helm registry client 経由で pull します。
+  - **リポジトリ alias 形式** (`<alias>/<chart>`、例: `argo-cd/argo-cd`)。
+    `<alias>` が `repositories:` で宣言された名前と一致する場合、その `url`
+    (HTTP(S) or OCI) から `version` の chart を pull します
+    (`helm repo add` は不要)。`<alias>` が未宣言の場合は従来どおりローカル
+    相対パスとして解決します。
 - `values` は value ファイルのパスとインライン map を順にマージし、最後に
   [`extraValueFiles`](#固有フィールド) を上書きとしてマージします。
 
-helmfile 本体の以下の機能は **未対応** です: environments / リモート chart /
+helmfile 本体の以下の機能は **未対応** です: environments /
 `bases` / release 間の `needs` / `hooks` / `--selector` 等。これらが必要な場合は
 helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md) などで取り込んでください。
 ただしテンプレート内の `{{ .Environment.Name }}` は参照でき、tazuna の
