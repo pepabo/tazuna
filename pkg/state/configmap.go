@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -25,18 +26,68 @@ const (
 	// stateKeyEncodedSep はStateKey文字列内の '/' をConfigMap data keyに収めるための置換文字列。
 	// ConfigMapのdata keyは [-._a-zA-Z0-9]+ しか許さず、'/' をそのまま使えない。
 	// k8s DNS-1123 名 (manifest名/group/namespace/name) はいずれも '_' を含まないため、
-	// '__' を区切りマーカとして用いれば安全に往復変換できる。
+	// '_' 始まりのシーケンスをエスケープマーカとして安全に往復変換できる。
+	// '/' は頻出するため短い '__' を維持する (既存 state との後方互換)。
 	stateKeyEncodedSep = "__"
 )
 
 // encodeStateKey はStateKey.String() 形式の文字列をConfigMap data keyに使える形式へ変換する。
+//   - '/' → "__" (従来どおり)
+//   - その他 [-._a-zA-Z0-9] に含まれないバイト → "_x" + 16進2桁 (小文字)
+//
+// RBAC リソース名は "cert-manager-webhook:subjectaccessreviews" のように ':' を
+// 含むことがあり、'/' 置換だけでは ConfigMap data key の制約に違反して
+// Save が失敗するため、任意の不許可文字を可逆にエスケープする。
 func encodeStateKey(k string) string {
-	return strings.ReplaceAll(k, "/", stateKeyEncodedSep)
+	var b strings.Builder
+	b.Grow(len(k))
+	for i := 0; i < len(k); i++ {
+		c := k[i]
+		switch {
+		case c == '/':
+			b.WriteString(stateKeyEncodedSep)
+		case c == '-' || c == '.' ||
+			('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9'):
+			b.WriteByte(c)
+		default:
+			// '_' 自体もここに含まれる (raw 名に現れない前提だが、現れても可逆になる)
+			fmt.Fprintf(&b, "_x%02x", c)
+		}
+	}
+	return b.String()
 }
 
 // decodeStateKey は encodeStateKey の逆変換を行う。
+// 左から走査し、'_' に続く文字でエスケープ種別を判定する:
+//   - "__"   → '/'
+//   - "_xHH" → 16進2桁のバイト
+//
+// 想定外の '_' シーケンス (旧バージョンや手書きの key) はそのまま残す。
 func decodeStateKey(k string) string {
-	return strings.ReplaceAll(k, stateKeyEncodedSep, "/")
+	var b strings.Builder
+	b.Grow(len(k))
+	for i := 0; i < len(k); {
+		if k[i] != '_' {
+			b.WriteByte(k[i])
+			i++
+			continue
+		}
+		if i+1 < len(k) && k[i+1] == '_' {
+			b.WriteByte('/')
+			i += 2
+			continue
+		}
+		if i+3 < len(k) && k[i+1] == 'x' {
+			if v, err := strconv.ParseUint(k[i+2:i+4], 16, 8); err == nil {
+				b.WriteByte(byte(v))
+				i += 4
+				continue
+			}
+		}
+		b.WriteByte(k[i])
+		i++
+	}
+	return b.String()
 }
 
 // ConfigMapStateStore はConfigMapベースのStateStore実装
