@@ -12,9 +12,9 @@ GenesisSecret は Kubernetes の CRD ではなく、**Tazuna が読む YAML ス�
 # tazuna.yaml
 spec:
   manifests:
-    - name: aws-credentials
+    - name: cloud-credentials
       type: genesissecret
-      path: ./genesissecrets/aws.yaml
+      path: ./genesissecrets/cloud.yaml
 ```
 
 `type: genesissecret` の `path` は **YAML ファイル 1 つを直接指します**
@@ -64,7 +64,7 @@ op://<op-host>/<vault>/<item>
 例:
 
 ```yaml
-uri: op://example.1password.com/Platform/aws-credentials
+uri: op://example.1password.com/example-vault/cloud-credentials
 ```
 
 scheme やホストはパースには通りますが、参照されません。
@@ -173,7 +173,7 @@ apiVersion: tazuna.pepabo.com/v1
 kind: GenesisSecret
 spec:
   secrets:
-    - uri: op://example.1password.com/Platform/aws-credentials
+    - uri: op://example.1password.com/example-vault/cloud-credentials
       preferLabel: true
       items:
         accessKeyID:
@@ -183,7 +183,7 @@ spec:
   outputs:
     - kubernetesSecret:
         namespace: default
-        name: aws-credentials
+        name: cloud-credentials
 ```
 
 `type: kubernetes.io/tls` を出力する例:
@@ -193,7 +193,7 @@ apiVersion: tazuna.pepabo.com/v1
 kind: GenesisSecret
 spec:
   secrets:
-    - uri: op://example.1password.com/Platform/tls-wildcard
+    - uri: op://example.1password.com/example-vault/tls-certificate
       preferLabel: true
       items:
         certificate:
@@ -203,7 +203,7 @@ spec:
   outputs:
     - kubernetesSecret:
         namespace: ingress-nginx
-        name: wildcard-tls
+        name: example-tls
         type: kubernetes.io/tls
         labels:
           managed-by: tazuna

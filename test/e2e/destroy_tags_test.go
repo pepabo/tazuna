@@ -14,7 +14,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// `tazuna destroy --tags` の e2e シナリオ。ADR005 Phase 3。
+// `tazuna destroy --tags` の e2e シナリオ。
 //
 // 検証内容:
 //  1. tags-filter-minimal fixture で alpha / beta 両方を apply

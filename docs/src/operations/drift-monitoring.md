@@ -45,9 +45,9 @@ Manifest: ingress-nginx
   STATUS         RESOURCE                                                     HASH
   modified       ingress-nginx/apps/v1/Deployment/ingress-nginx/controller    abc123... -> def456...
 
-Manifest: aws-credentials
+Manifest: cloud-credentials
   STATUS         RESOURCE                                                     HASH
-  always-sync    aws-credentials//v1/Secret/default/aws-credentials           xyz789...
+  always-sync    cloud-credentials//v1/Secret/default/cloud-credentials       xyz789...
 ```
 
 差分が無い場合は次の 1 行だけが出ます。

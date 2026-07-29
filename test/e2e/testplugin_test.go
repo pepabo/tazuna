@@ -14,7 +14,7 @@ import (
 )
 
 // testplugin (WaitUntil / ExistNonExist) の最小 e2e シナリオ。
-// ADR005 Phase 2「testplugin が実クラスタで動く」を検証する。
+// testplugin が実クラスタで動くことを検証する。
 //
 // 検証内容:
 //  1. kustomize で nginx Deployment をデプロイ

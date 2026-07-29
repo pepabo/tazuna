@@ -118,8 +118,8 @@ func TestManifestORAS_RoundTrip_AuthAndFlags(t *testing.T) {
 	}
 }
 
-func TestManifestORAS_YAMLUnmarshal_FromADRExample(t *testing.T) {
-	// ADR004 のサンプル yaml をパース可能であることを確認する
+func TestManifestORAS_YAMLUnmarshal_FromDocsExample(t *testing.T) {
+	// ドキュメントのサンプル yaml をパース可能であることを確認する
 	doc := `
 name: example
 type: oras

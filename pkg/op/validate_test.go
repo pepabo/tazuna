@@ -24,9 +24,9 @@ func TestValidateIdentifier(t *testing.T) {
 		{name: "tab", kind: "item", value: "name\tname", wantErr: true},
 		{name: "slash", kind: "vault", value: "a/b", wantErr: true},
 		{name: "shell metachar", kind: "vault", value: "v$(whoami)", wantErr: true},
-		{name: "unicode letters", kind: "vault", value: "my_基盤", wantErr: false},
+		{name: "unicode letters", kind: "vault", value: "サンプル_vault", wantErr: false},
 		{name: "unicode katakana", kind: "item", value: "ボールト", wantErr: false},
-		{name: "unicode with spaces", kind: "vault", value: "本番 Vault", wantErr: false},
+		{name: "unicode with spaces", kind: "vault", value: "サンプル Vault", wantErr: false},
 	}
 
 	for _, tc := range cases {

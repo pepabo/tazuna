@@ -9,7 +9,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// `tazuna check` の e2e シナリオ。ADR005 Phase 3。
+// `tazuna check` の e2e シナリオ。
 //
 // 検証内容:
 //  1. 正常な tazuna.yaml に対して exit code 0 + "ok" 出力

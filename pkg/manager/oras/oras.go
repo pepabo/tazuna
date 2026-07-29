@@ -2,8 +2,6 @@
 //
 // ORAS は OCI registry から artifact を pull し、tar.gz layer を展開した
 // ローカルディレクトリを helmfile / kustomize manager に委譲する Manager 実装。
-//
-// 詳細は docs/adr/004-oras-manager.md および oras-manager-roadmap.md (commit 5) を参照。
 package oras
 
 import (

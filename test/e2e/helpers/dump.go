@@ -17,8 +17,8 @@ import (
 // 内容を最終出力に含めるため、AfterEach や DeferCleanup から無条件に呼んでよい
 // (成功時は静か、失敗時のみ診断情報が見える)。
 //
-// ADR005「速度と安定性 / 失敗時の診断情報: テスト失敗時に kubectl get all -A
-// 相当の情報を stdout に dump するヘルパを必ず通す」要件の実装。
+// 「テスト失敗時に kubectl get all -A 相当の情報を stdout に dump する
+// ヘルパを必ず通す」要件の実装。
 //
 // dump 対象は kubectl get all のコア種別に揃える:
 //   - Pods / Services

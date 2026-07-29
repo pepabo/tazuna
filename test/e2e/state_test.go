@@ -15,7 +15,7 @@ import (
 )
 
 // `tazuna apply --sync` / `tazuna state list` / `tazuna state diff` の e2e シナリオ。
-// ADR005 Phase 2〜3: state コマンドの E2E 移植。
+// state コマンドの E2E 移植。
 // （旧 `state sync` は `apply --sync` に統合されたため、それに追従している）
 //
 // 検証内容:

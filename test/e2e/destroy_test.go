@@ -14,7 +14,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// `tazuna destroy` の最小 e2e シナリオ。ADR005 Phase 2 の追加分。
+// `tazuna destroy` の最小 e2e シナリオ。
 //
 // 検証内容:
 //  1. 専用 namespace tazuna-e2e-destroy を毎回削除→再作成 (冪等な掃除)
@@ -28,7 +28,7 @@ import (
 //
 // fixture は kustomize-minimal とは別に destroy-minimal を用意している。
 // 理由: kustomize-minimal の Deployment は namespace を hardcode しており、
-// 同 namespace を共有すると ADR005「namespace 単位で衝突を避ける」原則に反し、
+// 同 namespace を共有すると namespace 単位で衝突を避ける原則に反し、
 // 将来の `--procs > 1` での並列化と相性が悪いため。
 
 const (

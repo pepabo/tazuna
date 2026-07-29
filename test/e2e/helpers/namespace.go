@@ -16,7 +16,7 @@ import (
 )
 
 // cleanupNamespaceTimeout は CleanupNamespace が namespace 削除完了を待つ
-// デフォルトタイムアウト。ADR005「デフォルト WaitForResource の timeout は 60 秒」
+// デフォルトタイムアウト。WaitForResource のデフォルト timeout (60 秒) の
 // 基準に揃えている。これを超えるなら namespace 内のリソース GC が詰まっている
 // 可能性が高く、テスト設計を見直す合図とする。
 const cleanupNamespaceTimeout = 60 * time.Second
@@ -27,7 +27,7 @@ const cleanupNamespacePollInterval = 500 * time.Millisecond
 
 // CleanupNamespace は ns を削除→再作成して、テスト開始時にまっさらな状態にする。
 //
-// ADR005「冪等な掃除: 各シナリオは開始時に対象 namespace を削除→再作成する
+// 「冪等な掃除: 各シナリオは開始時に対象 namespace を削除→再作成する
 // (前テストの残骸に依存しない)」要件の最小実装。各 Describe / It の BeforeEach から呼ぶ。
 //
 // 動作:
@@ -38,7 +38,7 @@ const cleanupNamespacePollInterval = 500 * time.Millisecond
 // 失敗時は Ginkgo Fail を呼ぶ。AllowedKubeContext (kind-tazuna) のセーフガードは
 // BeforeSuite で済んでいるため、ここでは呼ばない。
 //
-// 「sleep して assert は禁止」(ADR005) のため待機は wait.PollUntilContextTimeout
+// sleep して assert するのは禁止のため待機は wait.PollUntilContextTimeout
 // を使う。Gomega Eventually を helper 関数内で使うと assertion failure の伝搬が
 // 不確実になるため避け、明示的に Fail を呼ぶ方針とする。
 func CleanupNamespace(ctx context.Context, client kubernetes.Interface, ns string) {

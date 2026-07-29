@@ -18,23 +18,23 @@ func TestParseOnePasswordURI(t *testing.T) {
 	}{
 		{
 			name:      "valid uri",
-			uri:       "op://example.1password.com/Platform/aws-credentials",
-			wantVault: "Platform",
-			wantItem:  "aws-credentials",
+			uri:       "op://example.1password.com/example-vault/cloud-credentials",
+			wantVault: "example-vault",
+			wantItem:  "cloud-credentials",
 		},
 		{
 			name:    "missing host (op CLI style op://<vault>/<item>)",
-			uri:     "op://Platform/aws-credentials",
+			uri:     "op://example-vault/cloud-credentials",
 			wantErr: true,
 		},
 		{
 			name:    "missing item",
-			uri:     "op://example.1password.com/Platform",
+			uri:     "op://example.1password.com/example-vault",
 			wantErr: true,
 		},
 		{
 			name:    "extra path segment",
-			uri:     "op://example.1password.com/Platform/item/field",
+			uri:     "op://example.1password.com/example-vault/item/field",
 			wantErr: true,
 		},
 		{
@@ -44,7 +44,7 @@ func TestParseOnePasswordURI(t *testing.T) {
 		},
 		{
 			name:    "wrong scheme",
-			uri:     "https://example.1password.com/Platform/item",
+			uri:     "https://example.1password.com/example-vault/item",
 			wantErr: true,
 		},
 		{

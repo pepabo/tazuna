@@ -23,7 +23,7 @@ const waitForResourcePollInterval = 500 * time.Millisecond
 // WaitForResource は ns/name で指定したリソースがクラスタ上に存在するように
 // なるまで dynamic client でポーリングし、timeout 内に観測できなければ Fail する。
 //
-// ADR005「testplugin と同様の wait semantics」要件の最小実装。GVR ベースで
+// 「testplugin と同様の wait semantics」要件の最小実装。GVR ベースで
 // 任意リソース (CRD 含む) を観測できるため、Deployment / Job / TazunaHint など
 // 種別を選ばず使える。
 //
@@ -32,10 +32,10 @@ const waitForResourcePollInterval = 500 * time.Millisecond
 //  2. NotFound はリトライ。それ以外のエラーは即終了して Fail
 //  3. timeout 経過時は Fail
 //
-// 「sleep して assert は禁止」(ADR005) に従い、待機は wait.PollUntilContextTimeout
+// sleep して assert するのは禁止のため、待機は wait.PollUntilContextTimeout
 // で統一する。Gomega Eventually は helper 内では使わず、明示 Fail で伝搬を確実にする。
 //
-// シグネチャは ADR005 に揃えて (gvr, ns, name, timeout) を取る。dynamic client は
+// シグネチャは (gvr, ns, name, timeout) を取る。dynamic client は
 // 呼び出し側で 1 回作って使い回す前提 (CleanupNamespace と同じパターン)。
 func WaitForResource(
 	ctx context.Context,
@@ -79,7 +79,7 @@ func WaitForResource(
 //  3. timeout 経過時は Fail
 //
 // ポーリング間隔は WaitForResource と共通の waitForResourcePollInterval (500ms)。
-// ADR005「sleep して assert は禁止」に従い、明示的な PollUntilContextTimeout を使う。
+// sleep して assert するのは禁止のため、明示的な PollUntilContextTimeout を使う。
 func WaitForResourceAbsent(
 	ctx context.Context,
 	dyn dynamic.Interface,

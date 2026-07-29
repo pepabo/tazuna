@@ -13,7 +13,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// testplugin WaitUntil の複雑 CEL 条件を検証する e2e シナリオ。ADR005 Phase 3。
+// testplugin WaitUntil の複雑 CEL 条件を検証する e2e シナリオ。
 //
 // 検証内容:
 //  1. 複合 && 条件: readyReplicas == 1 && labels["app"] == "nginx" && size(containers) > 0

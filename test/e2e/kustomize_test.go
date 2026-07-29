@@ -13,7 +13,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// kustomize manager の最小 e2e シナリオ。ADR005 Phase 2 のゴール
+// kustomize manager の最小 e2e シナリオ。ゴール
 // 「最小 1 シナリオ (kustomize apply のみ) で CI を通す」を満たす最初のスペック。
 //
 // 検証内容:

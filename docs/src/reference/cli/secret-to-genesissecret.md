@@ -49,7 +49,7 @@ tazuna secret-to-genesissecret \
   --op-host example.1password.com \
   --namespace production \
   --label-selector tazuna.pepabo.com/migrate=true \
-  --vault platform \
+  --vault example-vault \
   --dump-dir ./genesissecrets
 
 tazuna secret-to-genesissecret \

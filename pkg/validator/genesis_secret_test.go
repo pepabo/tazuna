@@ -22,7 +22,7 @@ func TestValidateGenesisSecretSpec(t *testing.T) {
 			name: "valid op uri with default provider",
 			spec: &v1.GenesisSecretSpec{
 				Secrets: []v1.GenesisSecretGenerate{
-					{URI: "op://example.1password.com/Platform/aws-credentials"},
+					{URI: "op://example.1password.com/example-vault/cloud-credentials"},
 				},
 			},
 		},
@@ -30,7 +30,7 @@ func TestValidateGenesisSecretSpec(t *testing.T) {
 			name: "malformed op uri with default provider",
 			spec: &v1.GenesisSecretSpec{
 				Secrets: []v1.GenesisSecretGenerate{
-					{URI: "op://Platform/aws-credentials"},
+					{URI: "op://example-vault/cloud-credentials"},
 				},
 			},
 			wantErr: true,
@@ -82,7 +82,7 @@ func TestValidateManifestGenesisSecret(t *testing.T) {
 		dir, name := writeFile(t, `
 spec:
   secrets:
-    - uri: op://example.1password.com/Platform/item
+    - uri: op://example.1password.com/example-vault/item
       items:
         password:
           mapTo: PASSWORD
@@ -96,7 +96,7 @@ spec:
 		dir, name := writeFile(t, `
 spec:
   secrets:
-    - uri: op://Platform/item
+    - uri: op://example-vault/item
       items:
         password:
           mapTo: PASSWORD

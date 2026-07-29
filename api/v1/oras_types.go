@@ -11,7 +11,6 @@ const (
 )
 
 // ManifestORAS はOCI registry (ORAS) からpullするmanifestの設定を表します。
-// 詳細は docs/adr/004-oras-manager.md を参照してください。
 type ManifestORAS struct {
 	// Reference はOCI artifactのreferenceを指定します。
 	// tag形式 (`ghcr.io/example/foo:v1.0.0`) と digest形式

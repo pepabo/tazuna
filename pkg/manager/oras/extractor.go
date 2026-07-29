@@ -2,7 +2,7 @@
 // ローカルに展開し、helmfile / kustomize manager に委譲するための機能を提供します。
 //
 // このファイルでは pullした tar.gz artifact を安全にローカルディレクトリへ
-// 展開する `Extract` を実装します。詳細は docs/adr/004-oras-manager.md を参照。
+// 展開する `Extract` を実装します。
 package oras
 
 import (
@@ -26,13 +26,13 @@ type Limits struct {
 }
 
 const (
-	// defaultMaxTotalBytes はADR004で定めた展開後合計サイズ上限 (1 GiB)。
+	// defaultMaxTotalBytes は展開後合計サイズ上限 (1 GiB)。
 	defaultMaxTotalBytes int64 = 1 << 30
-	// defaultMaxEntries はADR004で定めた entry 数上限。
+	// defaultMaxEntries は entry 数上限。
 	defaultMaxEntries = 10000
 )
 
-// DefaultLimits はADR004で定めたデフォルトの上限を返します。
+// DefaultLimits はデフォルトの上限を返します。
 func DefaultLimits() Limits {
 	return Limits{
 		MaxTotalBytes: defaultMaxTotalBytes,

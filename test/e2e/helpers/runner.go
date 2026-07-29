@@ -2,7 +2,7 @@
 
 // Package helpers は test/e2e/ 配下から共有される E2E テスト用ユーティリティを提供する。
 //
-// ADR005 (3層テストピラミッド) の E2E 層で利用される。ビルド済みの ./tazuna
+// 3層テストピラミッドの E2E 層で利用される。ビルド済みの ./tazuna
 // バイナリを exec.Command で叩いて assertion を行う。Ginkgo v2 + Gomega 前提で
 // 失敗時は Ginkgo の Fail を呼ぶ。
 package helpers

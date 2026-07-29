@@ -3,7 +3,7 @@ kind: Tazuna
 spec:
   manifests:
     - name: "testplugin-minimal-nginx"
-      description: "ADR005 Phase 2 e2e: verifies that testplugin (WaitUntil / ExistNonExist) works against a real cluster"
+      description: "e2e: verifies that testplugin (WaitUntil / ExistNonExist) works against a real cluster"
       type: kustomize
       path: ./kustomize
       tags:

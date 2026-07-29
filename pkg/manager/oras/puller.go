@@ -4,8 +4,6 @@
 // extractor で展開してローカルキャッシュに格納する。
 // digest ベースでキャッシュを共有するため、同一 digest の 2 回目以降の
 // pull はネットワークアクセスを伴わない。
-//
-// 詳細は docs/adr/004-oras-manager.md および oras-manager-roadmap.md (commit 4) を参照。
 package oras
 
 import (

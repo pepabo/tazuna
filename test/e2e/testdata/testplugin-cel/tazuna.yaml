@@ -3,7 +3,7 @@ kind: Tazuna
 spec:
   manifests:
     - name: "testplugin-cel-nginx"
-      description: "ADR005 Phase 3 e2e: verifies complex CEL conditions for WaitUntil"
+      description: "e2e: verifies complex CEL conditions for WaitUntil"
       type: kustomize
       path: ./kustomize
       tags:

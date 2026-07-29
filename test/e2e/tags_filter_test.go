@@ -13,7 +13,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// --tags フィルタの e2e シナリオ。ADR005 Phase 3。
+// --tags フィルタの e2e シナリオ。
 //
 // 検証内容:
 //  1. fixture に alpha / beta 2 つの kustomize manifest を用意

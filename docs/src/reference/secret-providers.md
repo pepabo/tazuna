@@ -112,7 +112,7 @@ spec:
 
 ```text
 DATABASE_URL=postgres://localhost/app
-API_TOKEN=ghp_xxx
+API_TOKEN=xxxxx
 ```
 
 GenesisSecret 側の `spec.secrets[].uri` は使われません（envfile は単一ファイルの

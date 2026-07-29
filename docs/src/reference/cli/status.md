@@ -59,7 +59,7 @@ Manifest: ingress-nginx
   NotReady  Deployment           ingress-nginx/admission-webhook
   Missing   Secret               ingress-nginx/missing-tls
 
-Manifest: aws-credentials
+Manifest: cloud-credentials
   (no state)
 ```
 

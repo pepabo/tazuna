@@ -9,7 +9,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// `tazuna build` の最小 e2e サニティシナリオ。ADR005 Phase 2 の追加分。
+// `tazuna build` の最小 e2e サニティシナリオ。
 //
 // kustomize-minimal fixture を再利用し、`./tazuna build -f ...` の標準出力に
 // kustomize で生成された Deployment manifest が含まれることを assert する。

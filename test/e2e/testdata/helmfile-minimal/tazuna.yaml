@@ -3,7 +3,7 @@ kind: Tazuna
 spec:
   manifests:
     - name: "helmfile-minimal-nginx"
-      description: "ADR005 Phase 2 e2e: minimal apply scenario for the helmfile manager alone"
+      description: "e2e: minimal apply scenario for the helmfile manager alone"
       type: helmfile
       path: ./helmfile/helmfile.yaml
       helmfile:

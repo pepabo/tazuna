@@ -13,7 +13,7 @@ import (
 	"github.com/pepabo/tazuna/test/e2e/helpers"
 )
 
-// helmfile manager の最小 e2e シナリオ。ADR005 Phase 2。
+// helmfile manager の最小 e2e シナリオ。
 //
 // 検証内容:
 //  1. 専用 namespace tazuna-e2e-helmfile を毎回削除→再作成 (冪等な掃除)

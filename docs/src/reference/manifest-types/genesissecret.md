@@ -15,9 +15,9 @@ Kubernetes Secret を生成する Manifest type です。
 
 ```yaml
 manifests:
-  - name: aws-credentials
+  - name: cloud-credentials
     type: genesissecret
-    path: ./genesissecrets/aws.yaml   # ← ファイルを直接指す
+    path: ./genesissecrets/cloud.yaml   # ← ファイルを直接指す
 ```
 
 ## 固有フィールド
@@ -29,9 +29,9 @@ manifests:
 
 ```yaml
 manifests:
-  - name: aws-credentials
+  - name: cloud-credentials
     type: genesissecret
-    path: ./genesissecrets/aws.yaml
+    path: ./genesissecrets/cloud.yaml
     # genesisSecret: {}  # 現状は中身が空のため書く必要なし
 ```
 

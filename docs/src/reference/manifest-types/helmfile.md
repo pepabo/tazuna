@@ -173,9 +173,9 @@ manifests:
           from: op
           op:
             key: label
-            vault: Platform
-            item: cert-manager
-            field: cloudflare-api-token
+            vault: example-vault
+            item: dns-provider
+            field: dns-provider-api-token
         extraLabels:
           from: static
           staticMap:

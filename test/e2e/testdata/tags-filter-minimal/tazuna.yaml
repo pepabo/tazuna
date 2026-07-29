@@ -3,13 +3,13 @@ kind: Tazuna
 spec:
   manifests:
     - name: "tags-filter-alpha"
-      description: "ADR005 Phase 3 e2e: only alpha should be applied with the --tags filter"
+      description: "e2e: only alpha should be applied with the --tags filter"
       type: kustomize
       path: ./kustomize-alpha
       tags:
         - alpha
     - name: "tags-filter-beta"
-      description: "ADR005 Phase 3 e2e: beta should not be applied with the --tags filter"
+      description: "e2e: beta should not be applied with the --tags filter"
       type: kustomize
       path: ./kustomize-beta
       tags:
