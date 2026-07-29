@@ -618,7 +618,34 @@ func helmfileTemplateFuncs() template.FuncMap {
 	funcs := sprig.TxtFuncMap()
 	delete(funcs, "env")
 	delete(funcs, "expandenv")
+	// sprig には含まれないが helm / helmfile が提供する toYaml / fromYaml を追加する。
+	// ORAS 経由で取得するリモート helmfile テンプレート (tazunahub 等) が
+	// `{{ .StateValues.foo | toYaml | indent N }}` の形で利用するため、これが無いと
+	// "function toYaml not defined" で render に失敗する。実装は helm と同じく
+	// sigs.k8s.io/yaml を用いる。
+	funcs["toYaml"] = toYAML
+	funcs["fromYaml"] = fromYAML
 	return funcs
+}
+
+// toYAML は値を YAML 文字列へ変換する (末尾改行は除去)。helm の同名関数と同じ挙動で、
+// marshal に失敗した場合は空文字を返す。
+func toYAML(v any) string {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(string(data), "\n")
+}
+
+// fromYAML は YAML 文字列を map へ変換する。helm の同名関数と同じく、失敗時は
+// "Error" キーにメッセージを格納した map を返す。
+func fromYAML(str string) map[string]any {
+	m := map[string]any{}
+	if err := yaml.Unmarshal([]byte(str), &m); err != nil {
+		m["Error"] = err.Error()
+	}
+	return m
 }
 
 // renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
