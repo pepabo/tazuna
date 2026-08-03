@@ -1,0 +1,8 @@
+releases:
+  - name: mylocalrelease
+    namespace: default
+    chart: ./mychart
+    version: 0.1.0
+    values:
+      - namespaceList:
+{{ .StateValues.namespaces | toYaml | indent 10 }}

@@ -70,6 +70,34 @@ func TestHelmfile_Build_RejectsEnvFunction(t *testing.T) {
 	assert.Contains(t, err.Error(), `function "env" not defined`)
 }
 
+// TestHelmfile_Build_ToYamlFunction は helmfile テンプレート内で `toYaml` が
+// 使えることを確認する。一部の helmfile.yaml.gotmpl は
+// `{{ .StateValues.xxx | toYaml | indent N }}` の形でリスト値を values に
+// 埋め込んでおり、これが `function "toYaml" not defined` で失敗しないことを
+// 保証する回帰テスト。
+func TestHelmfile_Build_ToYamlFunction(t *testing.T) {
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-toyaml/helmfile.yaml.gotmpl",
+		Helmfile: &v1.ManifestHelmfile{
+			Vars: map[string]v1.HelmFileVar{
+				"namespaces": {
+					From:        v1.HelmFileVarFromStatic,
+					StaticSlice: []string{"batch", "batch-integration"},
+				},
+			},
+		},
+	}
+
+	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.NoError(t, err)
+	assert.Contains(t, out, `namespace-count: "2"`)
+	assert.Contains(t, out, `first-namespace: "batch"`)
+	assert.Contains(t, out, `second-namespace: "batch-integration"`)
+}
+
 func TestHelmfile_ConstructHelmfileVars_OpFieldLookup(t *testing.T) {
 	client := fake.NewFakeClient()
 

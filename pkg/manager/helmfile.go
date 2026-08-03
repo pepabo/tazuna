@@ -3,6 +3,8 @@ package manager
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"log/slog"
 	"maps"
 	"os"
@@ -27,7 +29,10 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/chartutil"
 	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/downloader"
+	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/registry"
+	"helm.sh/helm/v3/pkg/repo"
 	"sigs.k8s.io/yaml"
 )
 
@@ -542,29 +547,69 @@ func (h *Helmfile) resolveChartPath(inst *action.Install, baseDir, chartRef stri
 
 // resolveRepoChart は repositories[] で宣言された HTTP(S) / OCI repository から
 // chartName を pull し、ローカルの .tgz への絶対パスを返します。
-func (h *Helmfile) resolveRepoChart(inst *action.Install, repo helmfileRepository, chartName string, registryClient *registry.Client) (string, error) {
-	if repositoryIsOCI(repo) {
+//
+// HTTP(S) repository については action.ChartPathOptions.LocateChart をそのまま
+// 使わず、下記の findAndDownloadRepoChart で同等のロジックを直接呼び出します。
+// LocateChart は「cwd に chartName と同名のファイル/ディレクトリが存在すれば
+// repository を無視してそれをローカル chart として扱う」という互換動作
+// (helm issue #7862) を内蔵しており、alias で明示的に repository を指定して
+// いるにもかかわらず、tazuna の実行時カレントディレクトリ (build 対象の
+// manifests リポジトリ) にたまたま同名のディレクトリが存在するだけで
+// 誤って解決されてしまう。ここは repositories[] の宣言によって repository
+// からの取得だと確定しているため、cwd の内容に左右されてはならない。
+func (h *Helmfile) resolveRepoChart(inst *action.Install, hfRepo helmfileRepository, chartName string, registryClient *registry.Client) (string, error) {
+	if repositoryIsOCI(hfRepo) {
 		if registryClient == nil {
-			return "", errors.Errorf("repository %q is an OCI registry but no registry client is available", repo.Name)
+			return "", errors.Errorf("repository %q is an OCI registry but no registry client is available", hfRepo.Name)
 		}
-		ref := ociChartRef(repo.URL, chartName)
+		ref := ociChartRef(hfRepo.URL, chartName)
 		cp, err := inst.LocateChart(ref, cli.New())
 		if err != nil {
-			return "", errors.Wrapf(err, "failed to pull oci chart %s from repository %q", chartName, repo.Name)
+			return "", errors.Wrapf(err, "failed to pull oci chart %s from repository %q", chartName, hfRepo.Name)
 		}
 		return cp, nil
 	}
 
-	// HTTP(S) repository: RepoURL をセットすると LocateChart が index.yaml を取得して
-	// chart を download する (helm repo add 相当を実行時に行う)。
-	inst.RepoURL = repo.URL
-	inst.Username = repo.Username
-	inst.Password = repo.Password
-	cp, err := inst.LocateChart(chartName, cli.New())
+	cp, err := findAndDownloadRepoChart(hfRepo, chartName, inst.Version, cli.New())
 	if err != nil {
-		return "", errors.Wrapf(err, "failed to pull chart %s from repository %q (%s)", chartName, repo.Name, repo.URL)
+		return "", errors.Wrapf(err, "failed to pull chart %s from repository %q (%s)", chartName, hfRepo.Name, hfRepo.URL)
 	}
 	return cp, nil
+}
+
+// findAndDownloadRepoChart は HTTP(S) repository の index.yaml から chartName の
+// tarball URL を解決し、settings.RepositoryCache 配下へ download します。
+// helm.sh/helm/v3/pkg/action.ChartPathOptions.LocateChart の HTTP(S) 分岐と
+// 同等の処理ですが、同関数が行うカレントディレクトリの os.Stat チェック
+// (repository 宣言よりローカル同名ファイルを優先する挙動) は意図的に行いません。
+func findAndDownloadRepoChart(hfRepo helmfileRepository, chartName, version string, settings *cli.EnvSettings) (string, error) {
+	chartURL, err := repo.FindChartInAuthRepoURL(hfRepo.URL, hfRepo.Username, hfRepo.Password, chartName, strings.TrimSpace(version), "", "", "", getter.All(settings))
+	if err != nil {
+		return "", err
+	}
+
+	if err := os.MkdirAll(settings.RepositoryCache, 0o755); err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	dl := downloader.ChartDownloader{
+		Out:              io.Discard,
+		Getters:          getter.All(settings),
+		Options:          []getter.Option{getter.WithBasicAuth(hfRepo.Username, hfRepo.Password)},
+		RepositoryConfig: settings.RepositoryConfig,
+		RepositoryCache:  settings.RepositoryCache,
+	}
+
+	dest, _, err := dl.DownloadTo(chartURL, strings.TrimSpace(version), settings.RepositoryCache)
+	if err != nil {
+		return "", err
+	}
+
+	abs, err := filepath.Abs(dest)
+	if err != nil {
+		return "", errors.WithStack(err)
+	}
+	return abs, nil
 }
 
 // releaseNeedsOCI は release の chart が OCI registry 経由の pull を要するかを返します。
@@ -614,11 +659,62 @@ func ociChartRef(repoURL, chartName string) string {
 // `{{ env "AWS_SECRET_ACCESS_KEY" }}` のように実行者の環境変数を窃取して
 // マニフェストへ焼き込むのを防ぐ。環境変数を参照したい場合は helmfile vars の
 // `from: env` を明示的に使うこと。
+//
+// sprig 自体には toYaml/fromYaml/toJson/fromJson が含まれていない。本家 helmfile や
+// helm chart テンプレートはこれらを追加で提供しており、一部の helmfile.yaml.gotmpl は
+// `{{ .StateValues.xxx | toYaml | indent N }}` のようにリスト/マップ値を埋め込むために
+// これらの関数へ依存している。互換性のため helm.sh/helm/v3/pkg/engine の funcMap と
+// 同じ実装を追加する。
 func helmfileTemplateFuncs() template.FuncMap {
 	funcs := sprig.TxtFuncMap()
 	delete(funcs, "env")
 	delete(funcs, "expandenv")
+
+	funcs["toYaml"] = toYAML
+	funcs["fromYaml"] = fromYAML
+	funcs["toJson"] = toJSON
+	funcs["fromJson"] = fromJSON
+
 	return funcs
+}
+
+// toYAML は v を YAML表現の文字列に変換します。helm chart テンプレートの toYaml と
+// 同様、marshal に失敗した場合は空文字列を返します (テンプレート内で扱いやすくするため)。
+func toYAML(v any) string {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSuffix(string(data), "\n")
+}
+
+// fromYAML は YAML文字列を map にデコードします。失敗した場合は "Error" キーに
+// エラーメッセージを詰めて返します (helm chart テンプレートの fromYaml と同じ挙動)。
+func fromYAML(str string) map[string]any {
+	m := map[string]any{}
+	if err := yaml.Unmarshal([]byte(str), &m); err != nil {
+		m["Error"] = err.Error()
+	}
+	return m
+}
+
+// toJSON は v を JSON表現の文字列に変換します。
+func toJSON(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+// fromJSON は JSON文字列を map にデコードします。失敗した場合は "Error" キーに
+// エラーメッセージを詰めて返します。
+func fromJSON(str string) map[string]any {
+	m := map[string]any{}
+	if err := json.Unmarshal([]byte(str), &m); err != nil {
+		m["Error"] = err.Error()
+	}
+	return m
 }
 
 // renderHelmfileTemplate は helmfile.yaml 本体を Go テンプレート + sprig で render します。
