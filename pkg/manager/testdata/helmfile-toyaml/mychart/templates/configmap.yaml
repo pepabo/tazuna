@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: toyaml-test
+  namespace: default
+data:
+  namespace-count: {{ len .Values.namespaceList | quote }}
+  first-namespace: {{ index .Values.namespaceList 0 | quote }}
+  second-namespace: {{ index .Values.namespaceList 1 | quote }}

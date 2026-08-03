@@ -4,6 +4,7 @@ package manager_test
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -329,6 +330,47 @@ func TestHelmfile_Build_HTTPRepoChart(t *testing.T) {
 	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
 	assert.NoError(t, err)
 	// argo-cd チャートは各種 Deployment を含むため、render 結果に現れる。
+	assert.Contains(t, out, "kind: Deployment")
+	assert.Contains(t, out, "argocd")
+}
+
+// TestHelmfile_Build_HTTPRepoChart_IgnoresLocalCwdCollision は repositories[] で
+// 明示的に宣言された HTTP(S) repository の `<alias>/<chart>` 参照が、たまたま
+// プロセスのカレントディレクトリに同名のディレクトリ (chart とは無関係のもの、
+// 例えば kustomize 用マニフェスト置き場) が存在していても repository からの
+// pull を優先することを検証する。
+//
+// helm.sh/helm/v3/pkg/action.ChartPathOptions.LocateChart は「cwd に chartName
+// と同名のファイル/ディレクトリがあれば repository を無視してそれをローカル
+// chart として扱う」という互換動作 (helm issue #7862) を内蔵しており、tazuna
+// build を実行する manifests リポジトリ側にたまたま同名ディレクトリが存在する
+// だけで `Chart.yaml file is missing` エラーになる実例が報告されている。
+func TestHelmfile_Build_HTTPRepoChart_IgnoresLocalCwdCollision(t *testing.T) {
+	// chart 名 "argo-cd" と同名の、Chart.yaml を持たないディレクトリを
+	// プロセスの cwd (このテストバイナリの実行ディレクトリ = pkg/manager) に作る。
+	collidingDir := "argo-cd"
+	if _, err := os.Stat(collidingDir); err == nil {
+		t.Fatalf("%s already exists in cwd; refusing to overwrite", collidingDir)
+	}
+	if err := os.Mkdir(collidingDir, 0o755); err != nil {
+		t.Fatalf("failed to create colliding dir: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(collidingDir)
+	})
+
+	client := fake.NewFakeClient()
+	m := manager.NewHelmfile(client, nil)
+
+	manifest := v1.Manifest{
+		Path: "testdata/helmfile-http-repo/helmfile.yaml",
+		Helmfile: &v1.ManifestHelmfile{
+			KubeVersion: "1.30.0",
+		},
+	}
+
+	out, err := m.Build(context.Background(), slog.New(slog.NewTextHandler(io.Discard, nil)), manifest)
+	assert.NoError(t, err)
 	assert.Contains(t, out, "kind: Deployment")
 	assert.Contains(t, out, "argocd")
 }
