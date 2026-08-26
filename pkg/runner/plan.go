@@ -262,7 +262,34 @@ func sanitizeForDiff(in *unstructured.Unstructured) *unstructured.Unstructured {
 	unstructured.RemoveNestedField(out.Object, "metadata", "managedFields")
 	unstructured.RemoveNestedField(out.Object, "metadata", "creationTimestamp")
 	unstructured.RemoveNestedField(out.Object, "metadata", "selfLink")
+	sanitizeNamespaceForDiff(out)
 	return out
+}
+
+// sanitizeNamespaceForDiff は Namespace に対して Kubernetes がサーバサイドで
+// 自動付与するフィールドを剥がす。desired 側のマニフェストに書かれていないのが
+// 通常のため、剥がさないと毎回 diff としてノイズになる。
+//   - metadata.labels."kubernetes.io/metadata.name": NamespaceDefaultLabelName admission controller が付与
+//   - spec.finalizers: ["kubernetes"]: Namespace controller が付与
+func sanitizeNamespaceForDiff(out *unstructured.Unstructured) {
+	if out.GetKind() != "Namespace" || out.GetAPIVersion() != "v1" {
+		return
+	}
+	labels := out.GetLabels()
+	if _, ok := labels["kubernetes.io/metadata.name"]; ok {
+		delete(labels, "kubernetes.io/metadata.name")
+		if len(labels) == 0 {
+			unstructured.RemoveNestedField(out.Object, "metadata", "labels")
+		} else {
+			out.SetLabels(labels)
+		}
+	}
+	if finalizers, ok, _ := unstructured.NestedStringSlice(out.Object, "spec", "finalizers"); ok && len(finalizers) == 1 && finalizers[0] == "kubernetes" {
+		unstructured.RemoveNestedField(out.Object, "spec", "finalizers")
+		if spec, ok, _ := unstructured.NestedMap(out.Object, "spec"); ok && len(spec) == 0 {
+			unstructured.RemoveNestedField(out.Object, "spec")
+		}
+	}
 }
 
 // formatPlanResourceKey はリソース表示用のキーを返す。
