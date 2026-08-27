@@ -328,7 +328,7 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	// 一度だけ読み込んで共有する。
 	extraValues := map[string]any{}
 	for _, vf := range m.Helmfile.ExtraValueFiles {
-		merged, err := loadValueFile(baseDir, vf)
+		merged, err := loadValueFile(baseDir, vf, vars, h.environment)
 		if err != nil {
 			return "", errors.Wrapf(err, "failed to load extra value file %s", vf)
 		}
@@ -357,7 +357,7 @@ func (h *Helmfile) render(ctx context.Context, m *v1.Manifest) (string, error) {
 	for i := range spec.Releases {
 		g.Go(func() error {
 			rel := &spec.Releases[i]
-			out, err := h.renderRelease(baseDir, rel, m.Helmfile, extraValues, repos, registryClient)
+			out, err := h.renderRelease(baseDir, rel, m.Helmfile, vars, extraValues, repos, registryClient)
 			if err != nil {
 				return errors.Wrapf(err, "failed to render release %q", rel.Name)
 			}
@@ -442,10 +442,11 @@ type helmfileRelease struct {
 }
 
 // renderRelease は 1 release を helm の ClientOnly + DryRun install で render します。
+// vars は values の .gotmpl render 時に .StateValues / .Values として注入され、
 // extraValues は release 間で共有される追加 values (読み込み済み)、repos は
 // repositories[] の alias→repository map、registryClient は OCI chart 用の共有 client
 // (OCI chart がない場合は nil)。
-func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile, extraValues map[string]any, repos map[string]helmfileRepository, registryClient *registry.Client) (string, error) {
+func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.ManifestHelmfile, vars map[string]any, extraValues map[string]any, repos map[string]helmfileRepository, registryClient *registry.Client) (string, error) {
 	if rel.Chart == "" {
 		return "", errors.Errorf("release %q has no chart", rel.Name)
 	}
@@ -497,7 +498,7 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	// マージする (helmfile の --values 相当)。
 	values := map[string]any{}
 	for _, v := range rel.Values {
-		merged, err := loadValueEntry(baseDir, v)
+		merged, err := loadValueEntry(baseDir, v, vars, h.environment)
 		if err != nil {
 			return "", errors.Wrapf(err, "failed to load values for release %q", rel.Name)
 		}
@@ -748,10 +749,12 @@ func renderHelmfileTemplate(path string, raw []byte, vars map[string]any, enviro
 
 // loadValueEntry は helmfile release の values[] の 1 エントリを map に変換します。
 // 文字列ならファイルパスとして読み込み、map ならそのまま採用します。
-func loadValueEntry(baseDir string, entry any) (map[string]any, error) {
+// vars / environment は string 経路で参照する values ファイルが .gotmpl だった場合の
+// Go テンプレート render (.StateValues / .Values / .Environment) に使われます。
+func loadValueEntry(baseDir string, entry any, vars map[string]any, environment string) (map[string]any, error) {
 	switch v := entry.(type) {
 	case string:
-		return loadValueFile(baseDir, v)
+		return loadValueFile(baseDir, v, vars, environment)
 	case map[string]any:
 		return v, nil
 	case nil:
@@ -762,7 +765,10 @@ func loadValueEntry(baseDir string, entry any) (map[string]any, error) {
 }
 
 // loadValueFile は value ファイルを読み込み map に変換します。
-func loadValueFile(baseDir, path string) (map[string]any, error) {
+// 拡張子が .gotmpl の場合は helmfile 互換のため renderHelmfileTemplate で
+// Go テンプレート (.StateValues / .Values / .Environment / sprig) を評価してから
+// YAML として unmarshal します。それ以外は従来通り生の YAML として parse します。
+func loadValueFile(baseDir, path string, vars map[string]any, environment string) (map[string]any, error) {
 	p := path
 	if !filepath.IsAbs(p) {
 		p = filepath.Join(baseDir, p)
@@ -770,6 +776,13 @@ func loadValueFile(baseDir, path string) (map[string]any, error) {
 	data, err := os.ReadFile(p)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read value file %s", p)
+	}
+	if strings.HasSuffix(p, ".gotmpl") {
+		rendered, err := renderHelmfileTemplate(p, data, vars, environment)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to render value file template %s", p)
+		}
+		data = rendered
 	}
 	out := map[string]any{}
 	if err := yaml.Unmarshal(data, &out); err != nil {
