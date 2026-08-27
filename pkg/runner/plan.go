@@ -133,8 +133,9 @@ func (t *TazunaRunner) Plan(
 		if err := writePlanManifestHeader(w, m.Name); err != nil {
 			return err
 		}
+		colorize := shouldColorize(t.colorMode, w)
 		for _, ch := range changes {
-			if err := writePlanChange(w, ch); err != nil {
+			if err := writePlanChange(w, ch, colorize); err != nil {
 				return err
 			}
 		}
@@ -333,7 +334,9 @@ func writePlanManifestHeader(w io.Writer, name string) error {
 // writePlanChange は 1 件の planChange を出力する。
 //   - create: "  + <Kind/ns/name> (to be created)"
 //   - update: "  ~ <Kind/ns/name>" の直後に util/diff.Diff の unified diff をインデントして出力
-func writePlanChange(w io.Writer, ch planChange) error {
+//
+// colorize が true のとき、update の diff 行に対して colorizeDiff で ANSI カラーを付与する。
+func writePlanChange(w io.Writer, ch planChange, colorize bool) error {
 	switch ch.kind {
 	case planChangeCreate:
 		if _, err := fmt.Fprintf(w, "  + %s (to be created)\n", ch.resourceKey); err != nil {
@@ -343,9 +346,13 @@ func writePlanChange(w io.Writer, ch planChange) error {
 		if _, err := fmt.Fprintf(w, "  ~ %s\n", ch.resourceKey); err != nil {
 			return errors.WithStack(err)
 		}
+		diff := ch.diff
+		if colorize {
+			diff = colorizeDiff(diff)
+		}
 		// util/diff.Diff の出力をそのまま流すと先頭行が "--- a..." 形式で長くなるので、
 		// 行頭にインデントを付けて読みやすくする。空行は潰す。
-		for _, line := range strings.Split(strings.TrimRight(ch.diff, "\n"), "\n") {
+		for _, line := range strings.Split(strings.TrimRight(diff, "\n"), "\n") {
 			if line == "" {
 				continue
 			}

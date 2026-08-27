@@ -61,6 +61,8 @@ type TazunaRunner struct {
 	// 設定する。テストや state_drift/status など render を行わない経路では nil で
 	// 構わない。
 	restConfig *rest.Config
+	// colorMode は plan 出力への ANSI カラー付与モード。未設定 (空文字列) は auto 相当。
+	colorMode ColorMode
 }
 
 type RunnerOption func(*TazunaRunner)
@@ -254,6 +256,14 @@ func WithORASPullOptions(opts orasmanager.PullOptions) RunnerOption {
 func WithApplyOptions(opts ApplyOptions) RunnerOption {
 	return func(r *TazunaRunner) {
 		r.applyOpts = opts
+	}
+}
+
+// WithColorMode は plan 出力の ANSI カラー付与モードを設定します。
+// 未設定時は ColorModeAuto と同じ挙動になります。
+func WithColorMode(mode ColorMode) RunnerOption {
+	return func(r *TazunaRunner) {
+		r.colorMode = mode
 	}
 }
 

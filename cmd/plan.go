@@ -35,6 +35,7 @@ Examples:
   tazuna plan -f tazuna.yaml
   tazuna plan -f tazuna.yaml --tags web,batch
   tazuna plan -f tazuna.yaml --log-level debug
+  tazuna plan -f tazuna.yaml --color on
   tazuna plan -f tazuna.yaml --otlp-endpoint=localhost:4317`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
@@ -56,6 +57,15 @@ Examples:
 
 		tags := getTags(cmd)
 
+		colorFlag, err := cmd.Flags().GetString("color")
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		colorMode, err := runner.ParseColorMode(colorFlag)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+
 		k8sClient, restConfig, err := cliutil.NewK8sClientAndConfig()
 		if err != nil {
 			return err
@@ -75,6 +85,7 @@ Examples:
 			runner.WithORASPullOptions(orasOpts),
 			runner.WithEnvironment(environment),
 			runner.WithRESTConfig(restConfig),
+			runner.WithColorMode(colorMode),
 		)
 
 		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
@@ -109,5 +120,6 @@ Examples:
 func init() {
 	addTagsFlag(planCmd, "Filter manifests by tag; only matching tags are planned")
 	addORASPullFlags(planCmd)
+	planCmd.Flags().String("color", "auto", "Colorize diff output: auto|on|off (auto = on when stdout is a TTY)")
 	rootCmd.AddCommand(planCmd)
 }
