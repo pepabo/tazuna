@@ -1,6 +1,11 @@
 package manager
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+)
 
 func TestSplitRepoAlias(t *testing.T) {
 	tests := []struct {
@@ -190,5 +195,67 @@ func TestReleaseNeedsOCI(t *testing.T) {
 				t.Fatalf("releaseNeedsOCI(%q) = %v, want %v", tt.rel.Chart, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLoadValueFile_GotmplRendered(t *testing.T) {
+	dir := t.TempDir()
+
+	// helmfile 実運用と同様、先頭にコメント + 空行を挟んでから go template action を書く。
+	// このパターンは素の YAML parse だと '{' から始まる flow mapping と誤認され失敗する
+	// (README で扱っている kube-prometheus-stack の再現ケース)。
+	content := `# comment header
+# another comment line
+
+{{- $thanosEnabled := eq .StateValues.env "staging" }}
+fullnameOverride: kube-prometheus-stack
+env: {{ .StateValues.env | quote }}
+thanosEnabled: {{ $thanosEnabled }}
+`
+	path := filepath.Join(dir, "values.yaml.gotmpl")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	vars := map[string]any{"env": "staging"}
+	got, err := loadValueFile(dir, "values.yaml.gotmpl", vars, "default")
+	if err != nil {
+		t.Fatalf("loadValueFile: %v", err)
+	}
+
+	want := map[string]any{
+		"fullnameOverride": "kube-prometheus-stack",
+		"env":              "staging",
+		"thanosEnabled":    true,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("loadValueFile mismatch:\n got=%#v\nwant=%#v", got, want)
+	}
+}
+
+func TestLoadValueFile_PlainYamlNotRendered(t *testing.T) {
+	dir := t.TempDir()
+
+	// 非 .gotmpl の values は go template として解釈してはならない。
+	// {{ }} を含むリテラル文字列 (例: helm chart 側で最終解釈する式) をそのまま保持する。
+	content := `image:
+  tag: "{{ .Chart.AppVersion }}"
+`
+	path := filepath.Join(dir, "values.yaml")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	got, err := loadValueFile(dir, "values.yaml", map[string]any{"env": "staging"}, "default")
+	if err != nil {
+		t.Fatalf("loadValueFile: %v", err)
+	}
+
+	image, ok := got["image"].(map[string]any)
+	if !ok {
+		t.Fatalf("image key missing or wrong type: %#v", got["image"])
+	}
+	if image["tag"] != "{{ .Chart.AppVersion }}" {
+		t.Fatalf("plain yaml was templated: got tag=%v", image["tag"])
 	}
 }
