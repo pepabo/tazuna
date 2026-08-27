@@ -22,6 +22,7 @@ Main subcommands:
   build                    Generate the manifests that would be applied and print them to stdout
   check                    Validate tazuna.yaml
   destroy                  Delete tazuna-managed resources from the cluster
+  chart                    Manage helm charts referenced by helmfile manifests
   plan                     Show per-field diffs between manifests and the live cluster
   status                   Show readiness of resources managed by tazuna
   tags                     List the tags defined in tazuna.yaml
