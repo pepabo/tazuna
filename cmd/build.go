@@ -48,18 +48,19 @@ Examples:
 		// build はクラスタを変更しないため、kubeconfig がなくても実行できる
 		// ように client の構築失敗は警告に留めて nil のまま進める
 		// (kubeconfig のない CI 環境でのオフライン build 用)。
-		k8sClient, err := cliutil.NewK8sClient()
+		k8sClient, restConfig, err := cliutil.NewK8sClientAndConfig()
 		if err != nil {
 			logger.Warn("kubeconfig is not available; continuing without a cluster client (build does not touch the cluster)",
 				"error", err.Error())
 			k8sClient = nil
+			restConfig = nil
 		}
 		orasOpts, err := buildORASPullOptions(cmd)
 		if err != nil {
 			return err
 		}
 		environment := cliutil.Environment(cmd)
-		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts), runner.WithEnvironment(environment))
+		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts), runner.WithEnvironment(environment), runner.WithRESTConfig(restConfig))
 
 		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
 		if err != nil {

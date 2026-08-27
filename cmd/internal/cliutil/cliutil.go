@@ -13,6 +13,7 @@ import (
 	v1 "github.com/pepabo/tazuna/api/v1"
 	"github.com/pepabo/tazuna/pkg/tmpl"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
@@ -158,13 +159,24 @@ func CheckMinimumSupportedVersion(tazuna *v1.Tazuna, current string) error {
 
 // NewK8sClient builds a controller-runtime client from the ambient kubeconfig.
 func NewK8sClient() (client.Client, error) {
+	c, _, err := NewK8sClientAndConfig()
+	return c, err
+}
+
+// NewK8sClientAndConfig は controller-runtime client と、それを組み立てた
+// *rest.Config を同時に返します。helmfile manager が cluster から Capabilities
+// (KubeVersion / APIVersions) を discover するために rest.Config を要求するため、
+// plan/apply/destroy/build のように実 cluster を触るコマンドではこちらを使います。
+// discovery を必要としないコマンド (status/state_drift 等) は従来通り NewK8sClient
+// で構いません。
+func NewK8sClientAndConfig() (client.Client, *rest.Config, error) {
 	restConfig, err := ctrl.GetConfig()
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	c, err := client.New(restConfig, client.Options{})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
-	return c, nil
+	return c, restConfig, nil
 }

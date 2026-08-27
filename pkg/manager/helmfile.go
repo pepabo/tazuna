@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -33,6 +34,8 @@ import (
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/registry"
 	"helm.sh/helm/v3/pkg/repo"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 )
 
@@ -63,6 +66,18 @@ type Helmfile struct {
 	// environment は -e/--environment フラグの値。helmfile.yaml テンプレートの
 	// {{ .Environment.Name }} に注入される。空文字なら "default"。
 	environment string
+
+	// restConfig は render 時に cluster から KubeVersion / APIVersions を discover
+	// して helm の Capabilities に注入するために使う。nil の場合 (CI offline lint 等)
+	// は helm SDK の DefaultCapabilities で render する (KubeVersion=v1.20.0 /
+	// DefaultVersionSet)。cluster に接続できるコマンド (plan/apply/destroy/build)
+	// では runner から WithRESTConfig で渡す。
+	restConfig *rest.Config
+	// discoveryOnce は plan/apply の 1 回の実行内で discovery 呼び出しを 1 回に抑える。
+	discoveryOnce sync.Once
+	cachedKubeVer *chartutil.KubeVersion
+	cachedAPIs    chartutil.VersionSet
+	discoveryErr  error
 }
 
 // Destroy implements Manager.
@@ -250,6 +265,68 @@ func NewHelmfile(client client.Client, opClient op.Client) *Helmfile {
 func (h *Helmfile) WithEnvironment(environment string) *Helmfile {
 	h.environment = environment
 	return h
+}
+
+// WithRESTConfig は render 時に cluster から Capabilities (KubeVersion / APIVersions)
+// を discover するための rest.Config を設定します。nil の場合は helm SDK の
+// DefaultCapabilities で render されるため、k8s 1.22+ で削除された古い GVK
+// (例: policy/v1beta1 PodDisruptionBudget) が render されるチャートで plan/apply が
+// 失敗します。cluster に接続できるコマンドでは必ず設定してください。
+func (h *Helmfile) WithRESTConfig(cfg *rest.Config) *Helmfile {
+	h.restConfig = cfg
+	return h
+}
+
+// clusterCapabilities は cluster から KubeVersion と APIVersions を取得して返します。
+// restConfig が nil、あるいは discovery に失敗した場合は (nil, nil, err) を返し、
+// 呼び出し側は helm SDK の DefaultCapabilities にフォールバックします。
+// 結果は sync.Once でキャッシュされ、1 回の render 全体で 1 回の discovery で済みます。
+func (h *Helmfile) clusterCapabilities() (*chartutil.KubeVersion, chartutil.VersionSet, error) {
+	h.discoveryOnce.Do(func() {
+		if h.restConfig == nil {
+			return
+		}
+		dc, err := discovery.NewDiscoveryClientForConfig(h.restConfig)
+		if err != nil {
+			h.discoveryErr = errors.Wrap(err, "failed to create discovery client")
+			return
+		}
+		sv, err := dc.ServerVersion()
+		if err != nil {
+			h.discoveryErr = errors.Wrap(err, "failed to get server version")
+			return
+		}
+		kv, err := chartutil.ParseKubeVersion(sv.GitVersion)
+		if err != nil {
+			h.discoveryErr = errors.Wrapf(err, "invalid server version %q", sv.GitVersion)
+			return
+		}
+		h.cachedKubeVer = kv
+
+		// helm の DefaultVersionSet (kube 標準の core GVK 一式) をベースに、cluster に
+		// 実在する GroupVersion と GroupVersion/Kind を追加していく。
+		// karpenter chart のように templates 側が Capabilities.APIVersions.Has "policy/v1"
+		// を条件分岐する場合はこれで v1 分岐が選ばれる。
+		apis := chartutil.DefaultVersionSet
+		groups, resources, err := dc.ServerGroupsAndResources()
+		// ServerGroupsAndResources は一部 API が unavailable でも部分成功で
+		// groups/resources を返すことがある (helm 自身も同様に部分結果を採用する)。
+		// discovery エラーそのものは fatal にはせず、取れた分だけ APIVersions に反映する。
+		_ = err
+		for _, g := range groups {
+			for _, v := range g.Versions {
+				apis = append(apis, v.GroupVersion)
+			}
+		}
+		for _, rl := range resources {
+			apis = append(apis, rl.GroupVersion)
+			for _, r := range rl.APIResources {
+				apis = append(apis, rl.GroupVersion+"/"+r.Kind)
+			}
+		}
+		h.cachedAPIs = apis
+	})
+	return h.cachedKubeVer, h.cachedAPIs, h.discoveryErr
 }
 
 // Build implements Manager.
@@ -474,12 +551,22 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	inst.IncludeCRDs = cfg.IncludeCRDs
 	inst.Version = rel.Version
 
+	// Capabilities (KubeVersion / APIVersions) の設定順:
+	//   1. cfg.KubeVersion が明示指定されていれば従来通りそれを使う (offline lint 互換)。
+	//   2. そうでなく restConfig が設定されていれば cluster から discover する。
+	//      discover で得た KubeVersion / APIVersions の両方を注入することで、
+	//      chart 内の {{ .Capabilities.APIVersions.Has "policy/v1" }} 分岐等が
+	//      実 cluster と一致した GVK で render される。
+	//   3. どちらも無ければ helm SDK の DefaultCapabilities に委ねる。
 	if cfg.KubeVersion != "" {
 		kv, err := chartutil.ParseKubeVersion(cfg.KubeVersion)
 		if err != nil {
 			return "", errors.Wrapf(err, "invalid kubeVersion %q", cfg.KubeVersion)
 		}
 		inst.KubeVersion = kv
+	} else if kv, apis, err := h.clusterCapabilities(); err == nil && kv != nil {
+		inst.KubeVersion = kv
+		inst.APIVersions = apis
 	}
 
 	chartPath, err := h.resolveChartPath(inst, baseDir, rel.Chart, repos, registryClient)

@@ -69,7 +69,7 @@ Examples:
 
 		tags := getTags(cmd)
 
-		k8sClient, err := cliutil.NewK8sClient()
+		k8sClient, restConfig, err := cliutil.NewK8sClientAndConfig()
 		if err != nil {
 			return err
 		}
@@ -116,6 +116,7 @@ Examples:
 			runner.WithORASPullOptions(orasOpts),
 			runner.WithApplyOptions(applyOpts),
 			runner.WithEnvironment(environment),
+			runner.WithRESTConfig(restConfig),
 		)
 
 		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
