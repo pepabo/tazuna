@@ -96,7 +96,6 @@ func TestResolveChartSource(t *testing.T) {
 		{"unknown-alias", "unknown/mychart", "local", "", ""},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			src := resolveChartSource("", tc.chartRef, repos)
