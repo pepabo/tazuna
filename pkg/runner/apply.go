@@ -121,7 +121,7 @@ func (t *TazunaRunner) ApplyToCluster(
 	if t.managersOverride != nil {
 		managers = t.managersOverride
 	} else {
-		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment)
+		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig)
 		if err != nil {
 			return errors.Wrap(err, "failed to setup managers")
 		}

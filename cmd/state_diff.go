@@ -39,12 +39,12 @@ Examples:
 			return err
 		}
 
-		k8sClient, err := cliutil.NewK8sClient()
+		k8sClient, restConfig, err := cliutil.NewK8sClientAndConfig()
 		if err != nil {
 			return err
 		}
 
-		r := runner.NewTazunaRunner(logger, k8sClient, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
+		r := runner.NewTazunaRunner(logger, k8sClient, nil, runner.WithEnvironment(cliutil.Environment(cmd)), runner.WithRESTConfig(restConfig))
 
 		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
 		if err != nil {

@@ -13,6 +13,7 @@ import (
 	orasmanager "github.com/pepabo/tazuna/pkg/manager/oras"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/testplugin"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -54,6 +55,12 @@ type TazunaRunner struct {
 	// 描画する際に {{ .Environment }} へ注入される。tazuna.yaml 本体は cliutil 側で描画
 	// 済みだが、include ファイルは runner が展開時に読み込むためここで保持する。
 	environment string
+	// restConfig は helmfile manager が render 時に cluster から Capabilities
+	// (KubeVersion / APIVersions) を discover するために使う。cluster に接続する
+	// コマンド (plan/apply/destroy/build) では cmd 層で WithRESTConfig を通じて
+	// 設定する。テストや state_drift/status など render を行わない経路では nil で
+	// 構わない。
+	restConfig *rest.Config
 }
 
 type RunnerOption func(*TazunaRunner)
@@ -92,6 +99,7 @@ func setupManagers(
 	providers []v1.ProviderConfig,
 	providersBaseDir string,
 	environment string,
+	restConfig *rest.Config,
 ) (map[string]manager.Manager, error) {
 	registry, err := buildProviderRegistry(opClient, providers, providersBaseDir)
 	if err != nil {
@@ -102,7 +110,7 @@ func setupManagers(
 	m[string(v1.ManifestTypeGenesisSecret)] = manager.NewGenesisSecret(k8sClient, registry)
 	kustomizeManager := manager.NewKustomize(k8sClient)
 	m[string(v1.ManifestTypeKustomize)] = kustomizeManager
-	helmfileManager := manager.NewHelmfile(k8sClient, opClient).WithEnvironment(environment)
+	helmfileManager := manager.NewHelmfile(k8sClient, opClient).WithEnvironment(environment).WithRESTConfig(restConfig)
 	m[string(v1.ManifestTypeHelmfile)] = helmfileManager
 	// ORAS managerはartifact pull後にhelmfile/kustomize managerへ委譲する
 	m[string(v1.ManifestTypeORAS)] = newORASManager(helmfileManager, kustomizeManager, orasOpts)
@@ -218,6 +226,18 @@ func WithTags(tags []string) RunnerOption {
 func WithEnvironment(environment string) RunnerOption {
 	return func(r *TazunaRunner) {
 		r.environment = environment
+	}
+}
+
+// WithRESTConfig は helmfile manager が cluster から Capabilities を discover する
+// ための rest.Config を設定します。cluster に接続する CLI コマンド (plan/apply/
+// destroy/build) で cmd 層から渡します。未設定時は helm SDK の DefaultCapabilities
+// で render されるため、k8s 1.22+ で削除された古い GVK を条件分岐する chart
+// (karpenter の policy/v1beta1 PDB フォールバック等) を含む release の plan が
+// 失敗する原因になります。
+func WithRESTConfig(cfg *rest.Config) RunnerOption {
+	return func(r *TazunaRunner) {
+		r.restConfig = cfg
 	}
 }
 
