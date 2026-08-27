@@ -219,6 +219,58 @@ func TestPlan_SkipGenesisSecret(t *testing.T) {
 		"debug log noting GenesisSecret is skipped should be emitted")
 }
 
+// TestPlan_TagsFilter は --tags 指定時、タグに合致しない manifest が
+// Build/live 比較の対象から外れ、その名前が出力に現れないことを縛る。
+// apply/build/destroy と同様のフィルタが plan にも効くことを保証する。
+func TestPlan_TagsFilter(t *testing.T) {
+	t.Parallel()
+
+	yaml := `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: default
+spec:
+  replicas: 3
+`
+	managers := map[string]manager.Manager{
+		string(v1.ManifestTypeKustomize): &planBuildManager{buildOut: yaml},
+	}
+
+	c := fake.NewClientBuilder().Build()
+	r := runner.NewTazunaRunner(discardLogger(), c, nil,
+		runner.WithManagersOverride(managers),
+		runner.WithTags([]string{"only-me"}))
+
+	tazuna := v1.Tazuna{
+		Spec: v1.TazunaSpec{
+			Manifests: []v1.Manifest{
+				{
+					Name: "matched",
+					Type: v1.ManifestTypeKustomize,
+					Path: "testdata/ok/kustomize",
+					Tags: []string{"only-me"},
+				},
+				{
+					Name: "skipped",
+					Type: v1.ManifestTypeKustomize,
+					Path: "testdata/ok/kustomize",
+					Tags: []string{"other"},
+				},
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := r.Plan(context.Background(), tazuna,
+		filepath.Join(t.TempDir(), "tazuna.yaml"), &buf)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Contains(t, out, "Manifest: matched")
+	assert.NotContains(t, out, "Manifest: skipped")
+}
+
 // seedUnstructured は YAML をパースして unstructured で live に Create する。
 // Build() 出力と同じ Unstructured 経路で揃えるため、テストの "完全一致" 条件を
 // 作るのに使う。

@@ -93,6 +93,11 @@ func (t *TazunaRunner) Plan(
 			continue
 		}
 
+		if !matchesTags(m, t.tags) {
+			t.logger.InfoContext(ctx, "skip manifest due to tags filter", slog.String("manifest-tags", strings.Join(m.Tags, ",")), slog.String("filter-tags", strings.Join(t.tags, ",")))
+			continue
+		}
+
 		// GenesisSecret は always-sync 扱いで apply 時に毎回再シンクされるため、
 		// plan のフィールド diff という概念に合わない。drift と同様にスキップする。
 		if m.Type == v1.ManifestTypeGenesisSecret {
