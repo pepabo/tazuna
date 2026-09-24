@@ -86,6 +86,54 @@ spec:
 	}
 }
 
+// TestGenesisSecret_Apply_StaticMergedWithProvider は spec.static が Provider
+// から取得した items とマージされ、かつキーが衝突した場合は static が優先される
+// ことを確認する。
+func TestGenesisSecret_Apply_StaticMergedWithProvider(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "genesis_secret.yaml")
+	err := os.WriteFile(path, []byte(`
+spec:
+  secrets:
+    - uri: op://example.1password.com/vault/item
+      items:
+        private key:
+          mapTo: sshPrivateKey
+        type:
+          mapTo: type
+  static:
+    url: git@example.com:example/example.git
+    type: git
+  outputs:
+    - kubernetesSecret:
+        namespace: argocd
+        name: repo-secret
+`), 0o644)
+	assert.NoError(t, err)
+
+	registry := genesissecret.NewProviderRegistry()
+	err = registry.Register(v1.DefaultOnePasswordProviderName, &fakeUnitSecretProvider{
+		m: map[string]string{"sshPrivateKey": "-----BEGIN...", "type": "from-provider"},
+	})
+	assert.NoError(t, err)
+
+	client := fake.NewFakeClient()
+	g := manager.NewGenesisSecret(client, registry).WithStdout(io.Discard)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+
+	_, err = g.Apply(context.Background(), logger, v1.Manifest{Path: path})
+	assert.NoError(t, err)
+
+	secret := corev1.Secret{}
+	assert.NoError(t, client.Get(context.Background(), types.NamespacedName{Namespace: "argocd", Name: "repo-secret"}, &secret))
+	assert.Equal(t, "-----BEGIN...", secret.StringData["sshPrivateKey"])
+	assert.Equal(t, "git@example.com:example/example.git", secret.StringData["url"])
+	// static の値が provider から取得した同名キーより優先される
+	assert.Equal(t, "git", secret.StringData["type"])
+}
+
 // TestGenesisSecret_Build_StdoutOnly は stdout 出力のみの場合に Build が
 // 空文字を返す (state entries が 0 になる) ことを確認する。
 func TestGenesisSecret_Build_StdoutOnly(t *testing.T) {
