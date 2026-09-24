@@ -7,7 +7,14 @@ type GenesisSecret struct {
 type GenesisSecretSpec struct {
 	Provider string                  `json:"provider"`
 	Secrets  []GenesisSecretGenerate `json:"secrets"`
-	Outputs  []GenesisSecretOutput   `json:"outputs"`
+	// Static は Provider を経由せず、この YAML に直接書いた固定値をそのまま
+	// 出力 Secret の data に含めるためのマップです。キーがそのまま出力
+	// Secret の data キー名になります（Provider 由来の secrets[].items のような
+	// mapTo リネームは行いません）。
+	// url や type のように、値自体は秘匿情報ではないが同じ Secret 内に
+	// 含める必要があるフィールド向けです。
+	Static  map[string]string     `json:"static,omitempty"`
+	Outputs []GenesisSecretOutput `json:"outputs"`
 }
 
 type GenesisSecretGenerate struct {

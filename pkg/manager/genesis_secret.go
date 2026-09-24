@@ -147,6 +147,7 @@ func (g *GenesisSecret) Apply(ctx context.Context, logger *slog.Logger, m v1.Man
 		}
 		items = merge(items, i)
 	}
+	items = merge(items, genesisSecret.Spec.Static)
 
 	for _, o := range genesisSecret.Spec.Outputs {
 		kind, err := classifyOutput(o)
@@ -347,6 +348,7 @@ func (g *GenesisSecret) Build(ctx context.Context, logger *slog.Logger, m v1.Man
 		}
 		items = merge(items, i)
 	}
+	items = merge(items, genesisSecret.Spec.Static)
 
 	if len(genesisSecret.Spec.Outputs) == 0 {
 		return "", fmt.Errorf("no outputs defined")

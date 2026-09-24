@@ -21,6 +21,10 @@ func TestGenesisSecret_RoundTrip(t *testing.T) {
 					},
 				},
 			},
+			Static: map[string]string{
+				"url":  "git@example.com:example/example.git",
+				"type": "git",
+			},
 			Outputs: []GenesisSecretOutput{
 				{
 					KubernetesSecret: &GenesisSecretOutputKubernetesSecret{
@@ -60,6 +64,10 @@ func TestGenesisSecret_RoundTrip(t *testing.T) {
 	}
 	if len(s.Items) != 2 || s.Items["username"].MapTo != "user" || s.Items["password"].MapTo != "pass" {
 		t.Errorf("Items = %+v", s.Items)
+	}
+
+	if got.Spec.Static["url"] != "git@example.com:example/example.git" || got.Spec.Static["type"] != "git" {
+		t.Errorf("Static = %+v", got.Spec.Static)
 	}
 
 	if len(got.Spec.Outputs) != 1 {

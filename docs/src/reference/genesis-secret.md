@@ -38,6 +38,7 @@ spec:
 |-------------|-------------------------------------------------|------|------------|------|
 | `provider`  | string                                          | -    | `""`       | 取得元 Provider の名前。`tazuna.yaml` の [`spec.providers[]`](./tazuna-yaml.md#providers) に宣言された `name` のいずれか、または組み込みの `default-op` を指定します。空文字のときは後方互換のため `default-op` にフォールバックします。詳細は [Secret provider](./secret-providers.md) を参照してください。 |
 | `secrets`   | [[GenesisSecretGenerate](#genesissecretgenerate)] | ◯ | -        | 取得対象。複数書けます。 |
+| `static`    | map\<string, string\>                           | -    | `null`     | Provider を経由しない固定値。詳細は [`static`](#static) 参照。 |
 | `outputs`   | [[GenesisSecretOutput](#genesissecretoutput)]     | ◯ | -        | 出力先。複数書けます。 |
 
 ## GenesisSecretGenerate
@@ -92,6 +93,42 @@ items:
 `mapTo` がそのまま Kubernetes Secret のキー名になります。
 `items` のキーが Provider 側に存在しないとエラーになります。
 
+## `static`
+
+`spec.static` は、Provider を経由せず **この GenesisSecret YAML に直接書いた固定値**を
+出力 Secret に含めるためのフィールドです。
+
+`secrets[].items[].mapTo` と異なり、`static` の **キーがそのまま出力 Secret の
+data キー名**になります（リネームの仕組みはありません）。
+
+ArgoCD の repository Secret における `url` / `type` のように、同じ Secret に
+含める必要はあるものの値そのものは秘匿情報ではないフィールド向けです。
+秘匿情報（`sshPrivateKey` など）は引き続き `secrets[]` 経由で Provider から取得してください。
+
+```yaml
+apiVersion: tazuna.pepabo.com/v1
+kind: GenesisSecret
+spec:
+  secrets:
+    - uri: op://example.1password.com/example-vault/deploy-key
+      preferLabel: true
+      items:
+        "private key":
+          mapTo: sshPrivateKey
+  static:
+    url: git@example.com:example/example.git
+    type: git
+  outputs:
+    - kubernetesSecret:
+        namespace: argocd
+        name: example-repo-secret
+        labels:
+          argocd.argoproj.io/secret-type: repository
+```
+
+`secrets[]` の結果と `static` は同じ `map[string]string` にマージされます。
+キーが衝突した場合は **`static` の値が優先**されます。
+
 ## GenesisSecretOutput
 
 `outputs[]` の各要素です。1 つの「出力先」を表します。
@@ -145,7 +182,8 @@ AWS_SECRET_ACCESS_KEY=...
 2. `spec.secrets[]` の各要素を Provider に渡し、フィールド集合を取得する。
 3. `items` の `mapTo` でキー名をリネームしながら、すべての `secrets[]` の結果を 1 つの
    `map[string]string` にマージする（同じキーが衝突した場合は **後勝ち**）。
-4. `spec.outputs[]` の各 `kubernetesSecret` について、`namespace` / `name` を持つ
+4. `spec.static` の内容を 3. の結果にマージする（キーが衝突した場合は `static` が優先）。
+5. `spec.outputs[]` の各 `kubernetesSecret` について、`namespace` / `name` を持つ
    Kubernetes `Secret` を `CreateOrUpdate` する。
    - `StringData` にマージ済みの map がそのまま入る。
    - `labels` / `annotations` / `type` は宣言どおりに付与される。
