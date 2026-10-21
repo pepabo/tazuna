@@ -1,0 +1,4 @@
+apiVersion: v2
+name: mychart
+description: A tiny chart for Capabilities injection test
+version: 0.1.0

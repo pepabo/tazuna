@@ -1,0 +1,5 @@
+releases:
+  - name: capabilities
+    namespace: default
+    chart: ./mychart
+    version: 0.1.0
