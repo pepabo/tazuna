@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: capabilities-test
+  namespace: default
+data:
+  kube-version: {{ .Capabilities.KubeVersion.Version | quote }}
+  has-example-api: {{ .Capabilities.APIVersions.Has "example.com/v1" | quote }}

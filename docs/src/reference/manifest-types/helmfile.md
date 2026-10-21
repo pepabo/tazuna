@@ -87,7 +87,7 @@ helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md
 | `extraValueFiles`     | [string]                          | -    | `[]`       | helmfile template に追加で渡す `--values` ファイル群。 |
 | `wait`                | bool                              | -    | `false`    | `true` のとき、`Apply` 後に対象リソースが Ready になるまで待ちます。詳細は [wait の挙動](#wait-の挙動) 参照。 |
 | `timeoutSeconds`      | int                               | -    | `0`        | `wait` の最大待機秒数。`0` のときは内部で `300` 秒（5 分）が使われます。 |
-| `kubeVersion`         | string                            | -    | `""`       | helmfile template に渡す `--kube-version` の値。 |
+| `kubeVersion`         | string                            | -    | `""`       | helmfile template に渡す `--kube-version` の値。未指定のときは cluster から discover した値を使います。指定しても `.Capabilities.APIVersions` は cluster から discover した値になります。 |
 
 ## `vars`
 

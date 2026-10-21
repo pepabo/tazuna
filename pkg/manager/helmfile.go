@@ -552,22 +552,27 @@ func (h *Helmfile) renderRelease(baseDir string, rel *helmfileRelease, cfg *v1.M
 	inst.IncludeCRDs = cfg.IncludeCRDs
 	inst.Version = rel.Version
 
-	// Capabilities (KubeVersion / APIVersions) の設定順:
-	//   1. cfg.KubeVersion が明示指定されていれば従来通りそれを使う (offline lint 互換)。
-	//   2. そうでなく restConfig が設定されていれば cluster から discover する。
-	//      discover で得た KubeVersion / APIVersions の両方を注入することで、
-	//      chart 内の {{ .Capabilities.APIVersions.Has "policy/v1" }} 分岐等が
-	//      実 cluster と一致した GVK で render される。
-	//   3. どちらも無ければ helm SDK の DefaultCapabilities に委ねる。
+	// Capabilities (KubeVersion / APIVersions) の設定:
+	//   - APIVersions は restConfig が設定されていれば cfg.KubeVersion の有無に関係なく
+	//     cluster から discover した値を注入する。chart 内の
+	//     {{ .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" }} のような
+	//     CRD の有無による分岐が、kubeVersion を明示した manifest でも実 cluster と
+	//     一致した GVK で render される。
+	//   - KubeVersion は cfg.KubeVersion が明示指定されていればそれを優先し
+	//     (offline lint 互換)、なければ cluster から discover した値を使う。
+	//   - どちらも得られなければ helm SDK の DefaultCapabilities に委ねる。
+	discoveredKubeVer, discoveredAPIs, discoveryErr := h.clusterCapabilities()
+	if discoveryErr == nil && discoveredAPIs != nil {
+		inst.APIVersions = discoveredAPIs
+	}
 	if cfg.KubeVersion != "" {
 		kv, err := chartutil.ParseKubeVersion(cfg.KubeVersion)
 		if err != nil {
 			return "", errors.Wrapf(err, "invalid kubeVersion %q", cfg.KubeVersion)
 		}
 		inst.KubeVersion = kv
-	} else if kv, apis, err := h.clusterCapabilities(); err == nil && kv != nil {
-		inst.KubeVersion = kv
-		inst.APIVersions = apis
+	} else if discoveryErr == nil && discoveredKubeVer != nil {
+		inst.KubeVersion = discoveredKubeVer
 	}
 
 	chartPath, err := h.resolveChartPath(inst, baseDir, rel.Chart, repos, registryClient)
