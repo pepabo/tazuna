@@ -163,7 +163,7 @@ func (t *TazunaRunner) resolvePlanManagers(tazuna v1.Tazuna) (map[string]manager
 		}
 		return out, nil
 	}
-	return setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig)
+	return setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig, t.tfstateResolver)
 }
 
 // computePlanChanges は desired (Build() 由来) オブジェクト群とライブクラスタの状態を

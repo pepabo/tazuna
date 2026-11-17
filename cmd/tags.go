@@ -29,7 +29,8 @@ Examples:
 			return errors.WithStack(err)
 		}
 
-		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
+		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
+		tazuna, tfstates, err := cliutil.LoadTazunaYAML(cmd.Context(), path, cliutil.Environment(cmd), logger)
 		if err != nil {
 			return err
 		}
@@ -38,8 +39,7 @@ Examples:
 			return errors.Wrapf(err, "validation failed for tazuna.yaml at %s", path)
 		}
 
-		logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
-		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
+		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)), runner.WithTFStateResolver(tfstates))
 
 		tags, err := r.ListTags(cmd.Context(), tazuna, path)
 		if err != nil {

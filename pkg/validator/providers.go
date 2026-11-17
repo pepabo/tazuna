@@ -50,6 +50,14 @@ func validateProviderConfig(pc v1.ProviderConfig) error {
 			return errors.New("envfile.path is required")
 		}
 		return nil
+	case v1.ProviderTypeTFState:
+		if pc.TFState == nil {
+			return errors.New("tfstate config is required for tfstate type")
+		}
+		if pc.TFState.Source == "" {
+			return errors.New("tfstate.source is required")
+		}
+		return nil
 	default:
 		return errors.Errorf("unsupported provider type %q", pc.Type)
 	}

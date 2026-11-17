@@ -13,6 +13,7 @@ import (
 	orasmanager "github.com/pepabo/tazuna/pkg/manager/oras"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/testplugin"
+	"github.com/pepabo/tazuna/pkg/tfstate"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -63,6 +64,11 @@ type TazunaRunner struct {
 	restConfig *rest.Config
 	// colorMode は plan 出力への ANSI カラー付与モード。未設定 (空文字列) は auto 相当。
 	colorMode ColorMode
+	// tfstateResolver は spec.tfstates[] の名前付き tfstate ソースを解決する。
+	// cmd 層で tazuna.yaml 描画に使ったものを WithTFStateResolver で受け取り、
+	// include の描画 / helmfile vars / tfstate Secret provider と state のキャッシュを
+	// 共有する。未設定の場合は expandIncludes の入口で spec.tfstates から構築する。
+	tfstateResolver *tfstate.Resolver
 }
 
 type RunnerOption func(*TazunaRunner)
@@ -94,6 +100,8 @@ func NewTazunaRunner(
 // providers を一切宣言しなくても従来挙動 (1Password のみ利用可能) が保たれる。
 // providers の baseDir は registry 構築時に envfile path 解決のために使う。
 // environment は helmfile manager の {{ .Environment.Name }} に伝播される。
+// tfstates は helmfile vars の `from: tfstate` と tfstate 型 Secret provider が使う
+// Resolver で、spec.tfstates が空なら nil でもよい。
 func setupManagers(
 	k8sClient client.Client,
 	opClient op.Client,
@@ -102,8 +110,9 @@ func setupManagers(
 	providersBaseDir string,
 	environment string,
 	restConfig *rest.Config,
+	tfstates *tfstate.Resolver,
 ) (map[string]manager.Manager, error) {
-	registry, err := buildProviderRegistry(opClient, providers, providersBaseDir)
+	registry, err := buildProviderRegistry(opClient, providers, providersBaseDir, tfstates)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +121,7 @@ func setupManagers(
 	m[string(v1.ManifestTypeGenesisSecret)] = manager.NewGenesisSecret(k8sClient, registry)
 	kustomizeManager := manager.NewKustomize(k8sClient)
 	m[string(v1.ManifestTypeKustomize)] = kustomizeManager
-	helmfileManager := manager.NewHelmfile(k8sClient, opClient).WithEnvironment(environment).WithRESTConfig(restConfig)
+	helmfileManager := manager.NewHelmfile(k8sClient, opClient).WithEnvironment(environment).WithRESTConfig(restConfig).WithTFStateResolver(tfstates)
 	m[string(v1.ManifestTypeHelmfile)] = helmfileManager
 	// ORAS managerはartifact pull後にhelmfile/kustomize managerへ委譲する
 	m[string(v1.ManifestTypeORAS)] = newORASManager(helmfileManager, kustomizeManager, orasOpts)
@@ -124,7 +133,8 @@ func setupManagers(
 // opClient が nil でなければ "default-op" が登録され、その後ユーザ宣言の
 // providers[] をパースして個別 provider を登録する。providersBaseDir は
 // envfile provider の相対 path 解決に使う (tazuna.yaml のディレクトリ)。
-func buildProviderRegistry(opClient op.Client, providers []v1.ProviderConfig, providersBaseDir string) (*genesissecret.ProviderRegistry, error) {
+// tfstates は tfstate 型 provider が参照する Resolver。
+func buildProviderRegistry(opClient op.Client, providers []v1.ProviderConfig, providersBaseDir string, tfstates *tfstate.Resolver) (*genesissecret.ProviderRegistry, error) {
 	registry := genesissecret.NewProviderRegistry()
 
 	// 組み込みの default 1Password provider を登録する。opClient が nil でも
@@ -137,7 +147,7 @@ func buildProviderRegistry(opClient op.Client, providers []v1.ProviderConfig, pr
 	}
 
 	for i, pc := range providers {
-		if err := registerProvider(registry, pc, providersBaseDir); err != nil {
+		if err := registerProvider(registry, pc, providersBaseDir, tfstates); err != nil {
 			return nil, errors.Wrapf(err, "failed to register provider[%d] %q", i, pc.Name)
 		}
 	}
@@ -147,7 +157,7 @@ func buildProviderRegistry(opClient op.Client, providers []v1.ProviderConfig, pr
 
 // registerProvider は 1 つの ProviderConfig を registry に登録する。
 // 型ごとの分岐と必須フィールド検査をここで集約する。
-func registerProvider(registry *genesissecret.ProviderRegistry, pc v1.ProviderConfig, baseDir string) error {
+func registerProvider(registry *genesissecret.ProviderRegistry, pc v1.ProviderConfig, baseDir string, tfstates *tfstate.Resolver) error {
 	if pc.Name == "" {
 		return fmt.Errorf("provider name must not be empty")
 	}
@@ -171,6 +181,14 @@ func registerProvider(registry *genesissecret.ProviderRegistry, pc v1.ProviderCo
 			path = filepath.Join(baseDir, path)
 		}
 		return registry.Register(pc.Name, genesissecret.NewEnvFileProvider(path))
+	case v1.ProviderTypeTFState:
+		if pc.TFState == nil || pc.TFState.Source == "" {
+			return fmt.Errorf("provider %q (tfstate): tfstate.source is required", pc.Name)
+		}
+		if !tfstates.Has(pc.TFState.Source) {
+			return fmt.Errorf("provider %q (tfstate): tfstate source %q is not declared in spec.tfstates", pc.Name, pc.TFState.Source)
+		}
+		return registry.Register(pc.Name, genesissecret.NewTFStateProvider(tfstates, pc.TFState.Source))
 	case "":
 		return fmt.Errorf("provider %q: type is required", pc.Name)
 	default:
@@ -241,6 +259,30 @@ func WithRESTConfig(cfg *rest.Config) RunnerOption {
 	return func(r *TazunaRunner) {
 		r.restConfig = cfg
 	}
+}
+
+// WithTFStateResolver は tazuna.yaml の描画に使った tfstate.Resolver を設定します。
+// cliutil.LoadTazunaYAML が返す Resolver を渡すことで、tazuna.yaml 本体・include
+// ファイル・helmfile vars・tfstate Secret provider の間で state の読み込みが 1 回に
+// まとまります。未設定 (nil) の場合は runner が spec.tfstates から自前で構築します。
+func WithTFStateResolver(r *tfstate.Resolver) RunnerOption {
+	return func(t *TazunaRunner) {
+		t.tfstateResolver = r
+	}
+}
+
+// ensureTFStateResolver は tfstateResolver が未設定なら spec.tfstates から構築します。
+// 相対パス (local backend の path) は tazuna.yaml のディレクトリから解決します。
+func (t *TazunaRunner) ensureTFStateResolver(tazuna *v1.Tazuna, tazunaYAMLPath string) error {
+	if t.tfstateResolver != nil {
+		return nil
+	}
+	r, err := tfstate.NewResolver(t.logger, tazuna.Spec.TFStates, filepath.Dir(tazunaYAMLPath), nil)
+	if err != nil {
+		return errors.Wrap(err, "invalid spec.tfstates")
+	}
+	t.tfstateResolver = r
+	return nil
 }
 
 // WithORASPullOptions は ORAS manager に渡す PullOptions を設定します。

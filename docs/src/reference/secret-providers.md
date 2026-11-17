@@ -5,7 +5,7 @@ Secret provider は、`type: genesissecret` の Manifest が **どこから秘�
 `tazuna.yaml` の `spec.providers[]` で provider を宣言し、各 GenesisSecret YAML の
 `spec.provider` でその名前を指定する形で対応付けます。
 
-このページでは provider レジストリの仕組みと、`onepassword` / `envfile` の 2 つの
+このページでは provider レジストリの仕組みと、`onepassword` / `envfile` / `tfstate` の 3 つの
 組み込み provider の宣言方法をまとめます。
 
 ## レジストリの基本
@@ -64,9 +64,10 @@ spec:
 | フィールド   | 型       | 必須 | デフォルト | 説明 |
 |--------------|----------|------|------------|------|
 | `name`       | string   | ◯    | -          | GenesisSecret の `spec.provider` から参照される名前。`default-op` は予約済みで使用不可。 |
-| `type`       | string   | ◯    | -          | provider の種類。現在は `onepassword` または `envfile`。 |
+| `type`       | string   | ◯    | -          | provider の種類。現在は `onepassword` / `envfile` / `tfstate` のいずれか。 |
 | `onepassword`| object   | △    | `null`     | `type: onepassword` のときに使う追加設定。 |
 | `envfile`    | object   | △    | `null`     | `type: envfile` のときに使う追加設定。 |
+| `tfstate`    | object   | △    | `null`     | `type: tfstate` のときに使う追加設定。 |
 
 `type` と整合しない config（例: `type: onepassword` なのに `envfile:` が書かれている）は
 バリデーションで弾かれます。
@@ -118,6 +119,50 @@ API_TOKEN=xxxxx
 GenesisSecret 側の `spec.secrets[].uri` は使われません（envfile は単一ファイルの
 key-value をそのまま返すため）。`items` のキーは envfile 上の key 名と一致させます。
 
+## `type: tfstate`
+
+Terraform の state から値を読む provider です。参照先の tfstate は `spec.tfstates[]` で
+宣言しておき、`tfstate.source` でその名前を指定します。
+
+```yaml
+spec:
+  tfstates:
+    - name: database
+      backend:
+        type: s3
+        s3:
+          bucket: example-tfstate
+          key: database/terraform.tfstate
+          region: ap-northeast-1
+  providers:
+    - name: tf-database
+      type: tfstate
+      tfstate:
+        source: database
+```
+
+| フィールド | 型     | 必須 | デフォルト | 説明 |
+|-----------|--------|------|------------|------|
+| `source`  | string | ◯    | -          | `spec.tfstates[].name` のいずれか。 |
+
+GenesisSecret の `items` のキーは **tfstate のアドレス** として解釈されます。
+
+```yaml
+spec:
+  provider: tf-database
+  secrets:
+    - items:
+        output.master_password:
+          mapTo: DB_PASSWORD
+        aws_db_instance.main.port:
+          mapTo: DB_PORT
+```
+
+- `spec.secrets[].uri` と `preferLabel` は使われません。
+- string はそのまま、number / bool は文字列化、list / map は JSON 文字列になります。`null` はエラーです。
+
+アドレスの書式や backend の設定は [tfstate 参照](./tfstate.md) を参照してください。
+
 ## `spec.provider` 解決の流れ
 
 GenesisSecret の `spec.provider` 値の扱いは次のとおりです。
@@ -138,9 +183,10 @@ GenesisSecret の `spec.provider` 値の扱いは次のとおりです。
 - 各 `name` がユニークであること
 - `name` が空文字でないこと
 - `name` が **`default-op`**（予約名）でないこと
-- `type` が `onepassword` / `envfile` のいずれかであること
+- `type` が `onepassword` / `envfile` / `tfstate` のいずれかであること
 - `type` と整合しない config（`type: onepassword` に `envfile:` が付いている等）が無いこと
 - `type: envfile` のときは `envfile.path` が必須
+- `type: tfstate` のときは `tfstate.source` が必須で、`spec.tfstates[]` に宣言された名前であること
 
 ## 関連
 

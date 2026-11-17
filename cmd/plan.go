@@ -77,6 +77,10 @@ Examples:
 		}
 
 		environment := cliutil.Environment(cmd)
+		tazuna, tfstates, err := cliutil.LoadTazunaYAML(ctx, path, environment, logger)
+		if err != nil {
+			return err
+		}
 		r := runner.NewTazunaRunner(
 			logger,
 			k8sClient,
@@ -86,12 +90,8 @@ Examples:
 			runner.WithEnvironment(environment),
 			runner.WithRESTConfig(restConfig),
 			runner.WithColorMode(colorMode),
+			runner.WithTFStateResolver(tfstates),
 		)
-
-		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
-		if err != nil {
-			return err
-		}
 
 		// tazuna.yamlのvalidation（include展開前のバリデーション）
 		if err := validator.ValidateTazunaWithBasePath(tazuna, filepath.Dir(path)); err != nil {

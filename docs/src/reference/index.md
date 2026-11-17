@@ -29,7 +29,10 @@
   ContentHash の計算ルール、Diff type の分類仕様。
 - **[Secret provider](./secret-providers.md)** —
   GenesisSecret から参照される Secret provider の宣言方法。組み込みの
-  `onepassword` / `envfile` の使い分けと、`spec.providers[]` の宣言、`default-op` 予約名。
+  `onepassword` / `envfile` / `tfstate` の使い分けと、`spec.providers[]` の宣言、`default-op` 予約名。
+- **[tfstate 参照](./tfstate.md)** —
+  `spec.tfstates[]` による tfstate の宣言（`s3` / `local` backend）、アドレスの書式、
+  helmfile vars・template 関数・GenesisSecret の 3 つの参照方法、キャッシュとログの挙動。
 - **[Manifest type 別](./manifest-types/index.md)** —
   `kustomize` / `helmfile` / `oras` / `genesissecret` の 4 type について、
   `path` の意味・固有フィールド・apply / destroy / build 時の振る舞いを 1 ページずつ。

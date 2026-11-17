@@ -90,6 +90,14 @@ func ValidateTazunaSpec(spec *v1.TazunaSpec, basePath string) error {
 		return errors.WithStack(err)
 	}
 
+	if err := ValidateTFStates(spec.TFStates); err != nil {
+		return errors.WithStack(err)
+	}
+
+	if err := ValidateTFStateReferences(spec); err != nil {
+		return errors.WithStack(err)
+	}
+
 	return nil
 }
 
@@ -195,7 +203,7 @@ func ValidateHelmFileVar(helmVar *v1.HelmFileVar, varName string) error {
 
 	// From フィールドの必須チェック
 	if helmVar.From == "" {
-		return errors.Errorf("helmfile var '%s' has no From field, supported From is 'env/static/op'", varName)
+		return errors.Errorf("helmfile var '%s' has no From field, supported From is 'env/static/op/tfstate'", varName)
 	}
 
 	switch helmVar.From {
@@ -214,8 +222,12 @@ func ValidateHelmFileVar(helmVar *v1.HelmFileVar, varName string) error {
 		if err := ValidateOnePasswordVaultSelector(helmVar.Op, varName); err != nil {
 			return errors.WithStack(err)
 		}
+	case v1.HelmFileVarFromTFState:
+		if err := ValidateTFStateRef(helmVar.TFState); err != nil {
+			return errors.Wrapf(err, "helmfile var '%s' has From tfstate", varName)
+		}
 	default:
-		return errors.Errorf("helmfile var '%s' has unsupported From field: %s, supported From is 'env/static/op'", varName, helmVar.From)
+		return errors.Errorf("helmfile var '%s' has unsupported From field: %s, supported From is 'env/static/op/tfstate'", varName, helmVar.From)
 	}
 
 	return nil

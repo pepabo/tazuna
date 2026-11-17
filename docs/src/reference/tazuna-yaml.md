@@ -39,6 +39,7 @@ spec:
 | `environments`         | map[string][EnvironmentSpec](#environments) | - | `{}` | 環境名をキーとする環境ごとの設定マップ。`-e/--environment <name>` で選択します。詳細は [`environments`](#environments) 参照。 |
 | `tests`                | [[TestPluginSpec](#tests-フィールド)] | - | `[]` | すべての Manifest 適用後に実行される Test plugin の配列。 |
 | `providers`            | [[ProviderConfig](#providers)] | - | `[]`      | GenesisSecret から参照される Secret provider の宣言リスト。組み込みの `default-op` 以外を使う場合に書きます。 |
+| `tfstates`             | [[TFStateSource](#tfstates)] | - | `[]`      | 参照する Terraform state の宣言リスト。詳細は [`tfstates`](#tfstates) と [tfstate 参照](./tfstate.md)。 |
 
 ### `minimumSupportedTazunaVersion`
 
@@ -171,6 +172,17 @@ $ tazuna apply -e production
 | 変数              | 型     | 説明 |
 |-------------------|--------|------|
 | `{{ .Environment }}` | string | `-e/--environment` フラグの値。未指定時は空文字列。 |
+
+### 対応している関数
+
+| 関数 | 説明 |
+|------|------|
+| `{{ tfstate "<source>" "<address>" }}` | `spec.tfstates[]` で宣言した tfstate から値を読み、文字列として埋め込みます。list / map は JSON になります。 |
+| `{{ tfstateJSON "<source>" "<address>" }}` | 値を JSON として埋め込みます。list / map を YAML の flow 形式で書きたいときに使います。 |
+
+詳しくは [tfstate 参照 - template 関数から参照する](./tfstate.md#template-関数から参照する) を参照してください。
+`spec.tfstates[]` を読み取るために、`tazuna.yaml` は 2 回描画されます
+（[読み込みの仕組み](./tfstate.md#読み込みの仕組み)）。
 
 ### 注意点
 
@@ -314,11 +326,42 @@ spec:
 | フィールド    | 型     | 必須 | デフォルト | 説明 |
 |---------------|--------|------|------------|------|
 | `name`        | string | ◯    | -          | GenesisSecret の `spec.provider` から参照される名前。`default-op` は予約名で使用不可。 |
-| `type`        | string | ◯    | -          | provider 種別。`onepassword` または `envfile`。 |
+| `type`        | string | ◯    | -          | provider 種別。`onepassword` / `envfile` / `tfstate` のいずれか。 |
 | `onepassword` | object | △    | `null`     | `type: onepassword` のときに使う追加設定（現状は空オブジェクト）。 |
 | `envfile`     | object | △    | `null`     | `type: envfile` のときに使う追加設定。`path` を持つ。 |
+| `tfstate`     | object | △    | `null`     | `type: tfstate` のときに使う追加設定。`source`（`spec.tfstates[].name`）を持つ。 |
 
 詳細は [Secret provider](./secret-providers.md) を参照してください。
+
+## tfstates
+
+`spec.tfstates[]` は、`tazuna.yaml` から参照する Terraform state の宣言リストです。
+helmfile vars の `from: tfstate`、template 関数 `tfstate` / `tfstateJSON`、`type: tfstate` の
+Secret provider は、ここで付けた `name` で参照先を指定します。
+
+```yaml
+spec:
+  tfstates:
+    - name: network
+      backend:
+        type: s3
+        s3:
+          bucket: example-tfstate
+          key: network/terraform.tfstate
+          region: ap-northeast-1
+    - name: local-dev
+      backend:
+        type: local
+        local:
+          path: ./terraform/terraform.tfstate
+```
+
+| フィールド | 型     | 必須 | 説明 |
+|------------|--------|------|------|
+| `name`     | string | ◯    | ソースの名前。`spec.tfstates[]` 内で一意。 |
+| `backend`  | object | ◯    | `type`（`s3` / `local`）と、`type` に対応する設定（`s3` / `local`）。 |
+
+backend ごとのフィールド、アドレスの書式、キャッシュの挙動は [tfstate 参照](./tfstate.md) を参照してください。
 
 ## IncludeFile
 

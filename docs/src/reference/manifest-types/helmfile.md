@@ -95,7 +95,7 @@ helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md
 
 `tazuna.yaml` のロード時、`vars` は次の順序で解決されます。
 
-1. 各 var の `from` (`env` / `static` / `op`) に応じて値を取得する。
+1. 各 var の `from` (`env` / `static` / `op` / `tfstate`) に応じて値を取得する。
 2. 同じディレクトリに [`tazuna.hint.yaml`](../tazuna-hint-yaml.md) があれば、`tazuna.hint.yaml` の
    検証・デフォルト注入を行う。
 
@@ -106,14 +106,15 @@ helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md
 
 | フィールド     | 型                                | 必須 | 説明 |
 |----------------|-----------------------------------|------|------|
-| `from`         | string                            | ◯    | 値の取得元。`env` / `static` / `op` のいずれか。 |
+| `from`         | string                            | ◯    | 値の取得元。`env` / `static` / `op` / `tfstate` のいずれか。 |
 | `env`          | string                            | △ (※) | `from: env` のとき必須。参照する環境変数名。 |
 | `static`       | string                            | △ (※) | `from: static` のときに使う。スカラー値。 |
 | `staticSlice`  | [string]                          | △ (※) | `from: static` のときに使う。スライス値。 |
 | `staticMap`    | map\<string, string\>             | △ (※) | `from: static` のときに使う。マップ値。 |
 | `op`           | [OnePasswordVaultSelector](#onepasswordvaultselector) | △ (※) | `from: op` のとき必須。 |
+| `tfstate`      | [TFStateRef](#tfstateref)         | △ (※) | `from: tfstate` のとき必須。 |
 
-(※) `from` の値に応じて、`env` / `static` 系のいずれか 1 つ / `op` が必須です。
+(※) `from` の値に応じて、`env` / `static` 系のいずれか 1 つ / `op` / `tfstate` が必須です。
 `from: static` の場合、`static` / `staticSlice` / `staticMap` のうち **1 つだけ** が設定されている必要があります。
 
 ### OnePasswordVaultSelector
@@ -124,6 +125,16 @@ helmfile でレンダリングした結果を [`type: kustomize`](./kustomize.md
 | `vault`    | string | ◯    | 1Password の Vault 名。 |
 | `item`     | string | ◯    | 1Password の Item 名。 |
 | `field`    | string | ◯    | 取得するフィールド。`key` が `id` ならフィールドの ID、`label` ならラベル。 |
+
+### TFStateRef
+
+| フィールド | 型     | 必須 | 説明 |
+|------------|--------|------|------|
+| `source`   | string | ◯    | `spec.tfstates[].name` のいずれか。 |
+| `address`  | string | ◯    | tfstate 内の値のアドレス（例: `output.vpc_id`、`aws_subnet.private[0].id`）。書式は [tfstate 参照 - アドレスの書式](../tfstate.md#アドレスの書式) を参照。 |
+
+`from: tfstate` の値は tfstate の型のまま（string / number / bool / list / map）渡されます。
+値が `null` の場合はエラーになります。
 
 ## `wait` の挙動
 
@@ -181,11 +192,17 @@ manifests:
           staticMap:
             managed-by: tazuna
             tier: platform
+        hostedZoneId:
+          from: tfstate
+          tfstate:
+            source: dns            # spec.tfstates[].name
+            address: output.hosted_zone_id
 ```
 
 ## 関連
 
 - helmfile.vars の制約: [`tazuna.hint.yaml` スキーマ](../tazuna-hint-yaml.md)
+- `from: tfstate`: [tfstate 参照](../tfstate.md)
 - 用語: [helmfile](../../concepts/glossary.md#helmfile) /
   [Helm](../../concepts/glossary.md#helm) /
   [1Password](../../concepts/glossary.md#1password)

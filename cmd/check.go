@@ -52,7 +52,12 @@ Examples:
 			return errors.WithStack(err)
 		}
 
-		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
+		logger, err := cliutil.NewLogger(cmd)
+		if err != nil {
+			return err
+		}
+
+		tazuna, tfstates, err := cliutil.LoadTazunaYAML(ctx, path, cliutil.Environment(cmd), logger)
 		if err != nil {
 			return err
 		}
@@ -72,11 +77,7 @@ Examples:
 			return err
 		}
 
-		logger, err := cliutil.NewLogger(cmd)
-		if err != nil {
-			return err
-		}
-		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
+		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)), runner.WithTFStateResolver(tfstates))
 
 		if fix {
 			// --fix は構造体を yaml.Marshal してファイルを上書きするため、

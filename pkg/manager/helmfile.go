@@ -18,6 +18,7 @@ import (
 	"github.com/pepabo/tazuna/pkg/manifest"
 	"github.com/pepabo/tazuna/pkg/op"
 	"github.com/pepabo/tazuna/pkg/resource"
+	"github.com/pepabo/tazuna/pkg/tfstate"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -63,6 +64,9 @@ import (
 type Helmfile struct {
 	client   client.Client
 	opClient op.Client
+	// tfstates は helmfile vars の `from: tfstate` を解決する。未設定 (nil) のまま
+	// `from: tfstate` の var を使うとエラーになる。
+	tfstates tfstate.Lookuper
 	// environment は -e/--environment フラグの値。helmfile.yaml テンプレートの
 	// {{ .Environment.Name }} に注入される。空文字なら "default"。
 	environment string
@@ -149,7 +153,7 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 
 	for k, v := range m.Helmfile.Vars {
 		if v.From == "" {
-			return nil, errors.Errorf("helmfile var %s has no From field, supported From is 'env/static/op'", k)
+			return nil, errors.Errorf("helmfile var %s has no From field, supported From is 'env/static/op/tfstate'", k)
 		}
 
 		switch v.From {
@@ -225,10 +229,25 @@ func (h *Helmfile) ConstructHelmfileVars(ctx context.Context, m *v1.Manifest) (m
 			if !found {
 				return nil, errors.Errorf("helmfile var %s has From op but op field %s not found in item %s", k, v.Op.Field, v.Op.Item)
 			}
+		case v1.HelmFileVarFromTFState:
+			if v.TFState == nil || v.TFState.Source == "" || v.TFState.Address == "" {
+				return nil, errors.Errorf("helmfile var %s has From tfstate but tfstate.source / tfstate.address is not set", k)
+			}
+			if h.tfstates == nil {
+				return nil, errors.Errorf("helmfile var %s has From tfstate but tfstate resolver is not set", k)
+			}
+			val, err := h.tfstates.Lookup(ctx, v.TFState.Source, v.TFState.Address)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to resolve helmfile var %s from tfstate", k)
+			}
+			if val == nil {
+				return nil, errors.Errorf("helmfile var %s: tfstate value %q in source %q is null", k, v.TFState.Address, v.TFState.Source)
+			}
+			vars[k] = val
 		default:
 			// typo等の未知のFromを黙って無視するとvarが欠落したまま
 			// missingkey=zeroでゼロ値レンダリングされるため、明示的にエラーにする
-			return nil, errors.Errorf("helmfile var %s has unsupported From field: %s, supported From is 'env/static/op'", k, v.From)
+			return nil, errors.Errorf("helmfile var %s has unsupported From field: %s, supported From is 'env/static/op/tfstate'", k, v.From)
 		}
 	}
 
@@ -264,6 +283,12 @@ func NewHelmfile(client client.Client, opClient op.Client) *Helmfile {
 // helmfile.yaml テンプレートの {{ .Environment.Name }} に反映されます。
 func (h *Helmfile) WithEnvironment(environment string) *Helmfile {
 	h.environment = environment
+	return h
+}
+
+// WithTFStateResolver は helmfile vars の `from: tfstate` を解決する Lookuper を設定します。
+func (h *Helmfile) WithTFStateResolver(l tfstate.Lookuper) *Helmfile {
+	h.tfstates = l
 	return h
 }
 

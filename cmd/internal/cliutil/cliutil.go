@@ -4,13 +4,16 @@
 package cliutil
 
 import (
+	"context"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/cockroachdb/errors"
 	v1 "github.com/pepabo/tazuna/api/v1"
+	"github.com/pepabo/tazuna/pkg/tfstate"
 	"github.com/pepabo/tazuna/pkg/tmpl"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
@@ -63,23 +66,54 @@ func NewLogger(cmd *cobra.Command) (*slog.Logger, error) {
 //
 // environment は -e/--environment フラグの値で、テンプレート内の {{ .Environment }}
 // に注入されます。フラグが渡されていない場合は空文字列を渡してください。
-func LoadTazunaYAML(path, environment string) (*v1.Tazuna, error) {
+//
+// tfstate 参照 (spec.tfstates[] と template 関数 tfstate / tfstateJSON) に対応する
+// ため、描画は 2 パスで行います。
+//
+//  1. template 関数を stub (backend に触れず空値を返す) にして描画・デコードし、
+//     spec.tfstates[] を取り出して tfstate.Resolver を構築する。
+//  2. Resolver の template 関数で本描画・デコードする。
+//
+// spec.tfstates[] 自体は tfstate の値に依存できません (1 パス目は stub 値になるため)。
+// backend へのアクセスは template 関数が実際に呼ばれたときだけ発生します。
+// 返す Resolver は runner.WithTFStateResolver で runner に渡すことで、helmfile vars /
+// Secret provider / include ファイルの描画と state のキャッシュを共有できます。
+// logger が nil の場合はログを破棄します。
+func LoadTazunaYAML(ctx context.Context, path, environment string, logger *slog.Logger) (*v1.Tazuna, *tfstate.Resolver, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
-	rendered, err := tmpl.Render(path, data, tmpl.Data{Environment: environment})
+	tmplData := tmpl.Data{Environment: environment}
+
+	// pass 1: spec.tfstates を得るための stub 描画
+	firstPass, err := tmpl.Render(path, data, tmplData)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
+	}
+	var pre v1.Tazuna
+	if err := yaml.Unmarshal(firstPass, &pre); err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+	if err := CheckMinimumSupportedVersion(&pre, currentVersion); err != nil {
+		return nil, nil, errors.WithStack(err)
+	}
+
+	resolver, err := tfstate.NewResolver(logger, pre.Spec.TFStates, filepath.Dir(path), nil)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "invalid spec.tfstates in %s", path)
+	}
+
+	// pass 2: 本描画
+	rendered, err := tmpl.RenderWithFuncs(path, data, tmplData, resolver.TemplateFuncs(ctx))
+	if err != nil {
+		return nil, nil, errors.WithStack(err)
 	}
 	tazuna := v1.Tazuna{}
 	if err := yaml.Unmarshal(rendered, &tazuna); err != nil {
-		return nil, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
-	if err := CheckMinimumSupportedVersion(&tazuna, currentVersion); err != nil {
-		return nil, errors.WithStack(err)
-	}
-	return &tazuna, nil
+	return &tazuna, resolver, nil
 }
 
 // ResolveContextMatches は environment に応じて有効な context_matches パターンと

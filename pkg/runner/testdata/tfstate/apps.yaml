@@ -1,0 +1,23 @@
+spec:
+  manifests:
+    - name: app
+      type: helmfile
+      path: ./app
+      helmfile:
+        vars:
+          vpcId:
+            from: tfstate
+            tfstate:
+              source: infra
+              address: output.vpc_id
+          subnets:
+            from: tfstate
+            tfstate:
+              source: infra
+              address: output.private_subnet_ids
+          namespace:
+            from: static
+            static: '{{ tfstate "infra" "output.namespace" }}'
+    - name: db-secret
+      type: genesissecret
+      path: ./secret/genesissecret.yaml

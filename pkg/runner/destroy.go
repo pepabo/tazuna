@@ -48,7 +48,7 @@ func (t *TazunaRunner) DestroyResourcesOnCluster(
 	tazuna v1.Tazuna,
 ) error {
 	// switchを書かずに処理を分けるためmapにmanagerを詰める
-	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig)
+	managers, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig, t.tfstateResolver)
 	if err != nil {
 		return errors.Wrap(err, "failed to setup managers")
 	}
