@@ -8145,6 +8145,8 @@ msgstr "map\\<string, string\\>"
 #: src/reference/genesis-secret.md:41
 msgid "Provider を経由しない固定値。詳細は [`static`](#static) 参照。"
 msgstr ""
+"Fixed values that do not go through a Provider. See [`static`](#static) for "
+"details."
 
 #: src/reference/genesis-secret.md:42
 msgid "`outputs`"
@@ -8314,12 +8316,16 @@ msgid ""
 "`spec.static` は、Provider を経由せず **この GenesisSecret YAML に直接書いた"
 "固定値**を 出力 Secret に含めるためのフィールドです。"
 msgstr ""
+"`spec.static` includes **fixed values written directly in this GenesisSecret "
+"YAML** in the output Secret, without going through a Provider."
 
 #: src/reference/genesis-secret.md:101
 msgid ""
 "`secrets[].items[].mapTo` と異なり、`static` の **キーがそのまま出力 Secret "
 "の data キー名**になります（リネームの仕組みはありません）。"
 msgstr ""
+"Unlike `secrets[].items[].mapTo`, **the keys of `static` become the data key "
+"names of the output Secret as-is** (there is no renaming)."
 
 #: src/reference/genesis-secret.md:104
 msgid ""
@@ -8328,10 +8334,14 @@ msgid ""
 "報（`sshPrivateKey` など）は引き続き `secrets[]` 経由で Provider から取得して"
 "ください。"
 msgstr ""
+"It is intended for fields that must be in the same Secret but whose values "
+"are not secret, such as `url` / `type` in an ArgoCD repository Secret. Keep "
+"fetching secret values (such as `sshPrivateKey`) from a Provider through "
+"`secrets[]`."
 
 #: src/reference/genesis-secret.md:113
 msgid "op://example.1password.com/example-vault/deploy-key"
-msgstr ""
+msgstr "op://example.1password.com/example-vault/deploy-key"
 
 #: src/reference/genesis-secret.md:114 src/reference/genesis-secret.md:215
 #: src/reference/genesis-secret.md:235
@@ -8340,11 +8350,11 @@ msgstr "preferLabel"
 
 #: src/reference/genesis-secret.md:116
 msgid "\"private key\""
-msgstr ""
+msgstr "\"private key\""
 
 #: src/reference/genesis-secret.md:117
 msgid "sshPrivateKey"
-msgstr ""
+msgstr "sshPrivateKey"
 
 #: src/reference/genesis-secret.md:118
 #: src/reference/manifest-types/helmfile.md:191
@@ -8358,33 +8368,35 @@ msgstr "url"
 
 #: src/reference/genesis-secret.md:119
 msgid "git@example.com:example/example.git"
-msgstr ""
+msgstr "git@example.com:example/example.git"
 
 #: src/reference/genesis-secret.md:120
 msgid "git"
-msgstr ""
+msgstr "git"
 
 #: src/reference/genesis-secret.md:123
 msgid "argocd"
-msgstr ""
+msgstr "argocd"
 
 #: src/reference/genesis-secret.md:124
 msgid "example-repo-secret"
-msgstr ""
+msgstr "example-repo-secret"
 
 #: src/reference/genesis-secret.md:126
 msgid "argocd.argoproj.io/secret-type"
-msgstr ""
+msgstr "argocd.argoproj.io/secret-type"
 
 #: src/reference/genesis-secret.md:126
 msgid "repository"
-msgstr ""
+msgstr "repository"
 
 #: src/reference/genesis-secret.md:129
 msgid ""
 "`secrets[]` の結果と `static` は同じ `map[string]string` にマージされます。 "
 "キーが衝突した場合は **`static` の値が優先**されます。"
 msgstr ""
+"The results of `secrets[]` and `static` are merged into the same "
+"`map[string]string`. When keys collide, **the `static` value wins**."
 
 #: src/reference/genesis-secret.md:132
 msgid "GenesisSecretOutput"
@@ -8558,6 +8570,8 @@ msgid ""
 "`spec.static` の内容を 3. の結果にマージする（キーが衝突した場合は `static` "
 "が優先）。"
 msgstr ""
+"Merge the contents of `spec.static` into the result of step 3 (`static` wins "
+"when keys collide)."
 
 #: src/reference/genesis-secret.md:186
 msgid ""
