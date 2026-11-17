@@ -121,7 +121,7 @@ func (t *TazunaRunner) ApplyToCluster(
 	if t.managersOverride != nil {
 		managers = t.managersOverride
 	} else {
-		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig)
+		m, err := setupManagers(t.k8sClient, t.opClient, t.orasPullOpts, tazuna.Spec.Providers, t.providersBaseDir, t.environment, t.restConfig, t.tfstateResolver)
 		if err != nil {
 			return errors.Wrap(err, "failed to setup managers")
 		}
@@ -505,6 +505,9 @@ func (t *TazunaRunner) saveManifestState(
 // expandIncludes はincludesフィールドを持つマニフェストを展開します
 func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, tazunaYAMLPath string) error {
 	baseDir := filepath.Dir(tazunaYAMLPath)
+	if err := t.ensureTFStateResolver(tazuna, tazunaYAMLPath); err != nil {
+		return err
+	}
 	var expandedManifests []v1.Manifest
 
 	for _, m := range tazuna.Spec.Manifests {
@@ -522,8 +525,8 @@ func (t *TazunaRunner) expandIncludes(ctx context.Context, tazuna *v1.Tazuna, ta
 				}
 
 				// tazuna.yaml 本体と同じく include ファイルも Go template として描画し、
-				// {{ .Environment }} を解決してからパースする。
-				rendered, err := tmpl.Render(includePath, includeData, tmpl.Data{Environment: t.environment})
+				// {{ .Environment }} と tfstate / tfstateJSON 関数を解決してからパースする。
+				rendered, err := tmpl.RenderWithFuncs(includePath, includeData, tmpl.Data{Environment: t.environment}, t.tfstateResolver.TemplateFuncs(ctx))
 				if err != nil {
 					return errors.WithStack(err)
 				}

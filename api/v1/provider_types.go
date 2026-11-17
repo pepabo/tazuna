@@ -31,6 +31,8 @@ const (
 	ProviderTypeOnePassword ProviderType = "onepassword"
 	// ProviderTypeEnvFile represents the Secret provider that reads from a .env file.
 	ProviderTypeEnvFile ProviderType = "envfile"
+	// ProviderTypeTFState represents the Secret provider that reads values from a tfstate.
+	ProviderTypeTFState ProviderType = "tfstate"
 )
 
 // DefaultOnePasswordProviderName is the reserved name of the built-in 1Password
@@ -46,7 +48,7 @@ type ProviderConfig struct {
 	// Name は GenesisSecret の .spec.provider から参照される識別子です。
 	// "default-op" は組み込みの 1Password provider 用に予約されています。
 	Name string `json:"name"`
-	// Type は provider の種類です。"onepassword" / "envfile" のいずれかを指定します。
+	// Type は provider の種類です。"onepassword" / "envfile" / "tfstate" のいずれかを指定します。
 	Type ProviderType `json:"type"`
 
 	// OnePassword は Type が "onepassword" のときに使う追加設定です。現状は空でも
@@ -55,6 +57,9 @@ type ProviderConfig struct {
 	// EnvFile は Type が "envfile" のときに使う追加設定です。Path に .env ファイル
 	// (tazuna.yaml からの相対パス) を指定します。
 	EnvFile *EnvFileProviderConfig `json:"envfile,omitempty"`
+	// TFState は Type が "tfstate" のときに使う追加設定です。Source に
+	// spec.tfstates[].name を指定します。
+	TFState *TFStateProviderConfig `json:"tfstate,omitempty"`
 }
 
 // OnePasswordProviderConfig は OnePassword provider 用の追加設定です。

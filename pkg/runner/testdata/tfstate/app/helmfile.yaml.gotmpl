@@ -1,0 +1,8 @@
+releases:
+  - name: app
+    namespace: {{ .StateValues.namespace }}
+    chart: ./chart
+    values:
+      - vpcId: {{ .StateValues.vpcId | quote }}
+        subnets:
+{{ .StateValues.subnets | toYaml | indent 10 }}

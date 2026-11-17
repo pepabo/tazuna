@@ -1,9 +1,11 @@
 package cliutil_test
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	v1 "github.com/pepabo/tazuna/api/v1"
@@ -45,7 +47,7 @@ spec:
 		t.Fatalf("write tmp file: %v", err)
 	}
 
-	got, err := cliutil.LoadTazunaYAML(path, "")
+	got, _, err := cliutil.LoadTazunaYAML(context.Background(), path, "", nil)
 	if err != nil {
 		t.Fatalf("LoadTazunaYAML returned error: %v", err)
 	}
@@ -59,7 +61,7 @@ spec:
 
 func TestLoadTazunaYAML_MissingFile(t *testing.T) {
 	t.Parallel()
-	if _, err := cliutil.LoadTazunaYAML(filepath.Join(t.TempDir(), "does-not-exist.yaml"), ""); err == nil {
+	if _, _, err := cliutil.LoadTazunaYAML(context.Background(), filepath.Join(t.TempDir(), "does-not-exist.yaml"), "", nil); err == nil {
 		t.Fatal("expected error for missing file, got nil")
 	}
 }
@@ -82,7 +84,7 @@ spec:
 		t.Fatalf("write tmp file: %v", err)
 	}
 
-	got, err := cliutil.LoadTazunaYAML(path, "staging")
+	got, _, err := cliutil.LoadTazunaYAML(context.Background(), path, "staging", nil)
 	if err != nil {
 		t.Fatalf("LoadTazunaYAML returned error: %v", err)
 	}
@@ -231,14 +233,126 @@ spec:
 	}
 
 	// デフォルト("dev")ではゲートをスキップするのでエラーにならない。
-	if _, err := cliutil.LoadTazunaYAML(path, ""); err != nil {
+	if _, _, err := cliutil.LoadTazunaYAML(context.Background(), path, "", nil); err != nil {
 		t.Fatalf("LoadTazunaYAML with dev version returned error: %v", err)
 	}
 
 	// 実行バージョンを下回る値にすると LoadTazunaYAML がエラーになる。
 	cliutil.SetCurrentVersion("1.0.0")
 	t.Cleanup(func() { cliutil.SetCurrentVersion("dev") })
-	if _, err := cliutil.LoadTazunaYAML(path, ""); err == nil {
+	if _, _, err := cliutil.LoadTazunaYAML(context.Background(), path, "", nil); err == nil {
 		t.Fatal("expected error when running version is below minimum, got nil")
+	}
+}
+
+// TestLoadTazunaYAML_TFStateTemplate は 2 パス描画で spec.tfstates を読み取り、
+// 同じファイル内の {{ tfstate }} / {{ tfstateJSON }} が解決されることを確認します。
+func TestLoadTazunaYAML_TFStateTemplate(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	state := `{"version":4,"serial":1,"outputs":{
+  "namespace":{"value":"platform"},
+  "tags":{"value":["a","b"]},
+  "env_name":{"value":"staging"}
+}}`
+	if err := os.WriteFile(filepath.Join(dir, "infra.tfstate"), []byte(state), 0o600); err != nil {
+		t.Fatalf("write tfstate: %v", err)
+	}
+	src := `apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  tfstates:
+    - name: infra
+      backend:
+        type: local
+        local:
+          path: ./{{ .Environment }}.tfstate
+  manifests:
+    - name: app
+      type: kustomize
+      path: ./app
+      kustomize:
+        defaultNamespace: {{ tfstate "infra" "output.namespace" }}
+      tags: {{ tfstateJSON "infra" "output.tags" }}
+`
+	path := filepath.Join(dir, "tazuna.yaml")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatalf("write tazuna.yaml: %v", err)
+	}
+
+	got, resolver, err := cliutil.LoadTazunaYAML(context.Background(), path, "infra", nil)
+	if err != nil {
+		t.Fatalf("LoadTazunaYAML returned error: %v", err)
+	}
+	if resolver == nil || !resolver.Has("infra") {
+		t.Fatalf("resolver must contain source infra")
+	}
+	m := got.Spec.Manifests[0]
+	if m.Kustomize == nil || m.Kustomize.DefaultNamespace != "platform" {
+		t.Errorf("defaultNamespace = %+v, want platform", m.Kustomize)
+	}
+	if len(m.Tags) != 2 || m.Tags[0] != "a" || m.Tags[1] != "b" {
+		t.Errorf("tags = %v, want [a b]", m.Tags)
+	}
+	// spec.tfstates の local path も {{ .Environment }} で描画されている
+	if p := got.Spec.TFStates[0].Backend.Local.Path; p != "./infra.tfstate" {
+		t.Errorf("tfstates[0].backend.local.path = %q", p)
+	}
+}
+
+func TestLoadTazunaYAML_TFStateErrors(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		src     string
+		wantErr string
+	}{
+		{
+			name:    "undeclared source",
+			src:     "spec:\n  manifests: []\n  context_matches: ['{{ tfstate \"nope\" \"output.x\" }}']\n",
+			wantErr: `tfstate source "nope" is not declared`,
+		},
+		{
+			name:    "invalid tfstates",
+			src:     "spec:\n  tfstates:\n    - name: a\n      backend:\n        type: gcs\n  manifests: []\n",
+			wantErr: `unsupported tfstate backend type "gcs"`,
+		},
+		{
+			name:    "missing state file",
+			src:     "spec:\n  tfstates:\n    - name: a\n      backend:\n        type: local\n        local:\n          path: ./missing.tfstate\n  manifests: []\n  context_matches: ['{{ tfstate \"a\" \"output.x\" }}']\n",
+			wantErr: "failed to read tfstate file",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), "tazuna.yaml")
+			if err := os.WriteFile(path, []byte(tt.src), 0o600); err != nil {
+				t.Fatalf("write: %v", err)
+			}
+			_, _, err := cliutil.LoadTazunaYAML(context.Background(), path, "", nil)
+			if err == nil {
+				t.Fatalf("expected error containing %q", tt.wantErr)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestLoadTazunaYAML_NoTFStateAccessWithoutTemplate は template 関数を使わない限り
+// backend に一切アクセスしないことを確認します (存在しない path でも成功する)。
+func TestLoadTazunaYAML_NoTFStateAccessWithoutTemplate(t *testing.T) {
+	t.Parallel()
+	src := "spec:\n  tfstates:\n    - name: a\n      backend:\n        type: local\n        local:\n          path: ./missing.tfstate\n  manifests: []\n"
+	path := filepath.Join(t.TempDir(), "tazuna.yaml")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, _, err := cliutil.LoadTazunaYAML(context.Background(), path, "", nil); err != nil {
+		t.Fatalf("LoadTazunaYAML returned error: %v", err)
 	}
 }

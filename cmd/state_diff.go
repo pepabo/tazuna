@@ -43,13 +43,11 @@ Examples:
 		if err != nil {
 			return err
 		}
-
-		r := runner.NewTazunaRunner(logger, k8sClient, nil, runner.WithEnvironment(cliutil.Environment(cmd)), runner.WithRESTConfig(restConfig))
-
-		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
+		tazuna, tfstates, err := cliutil.LoadTazunaYAML(ctx, path, cliutil.Environment(cmd), logger)
 		if err != nil {
 			return err
 		}
+		r := runner.NewTazunaRunner(logger, k8sClient, nil, runner.WithEnvironment(cliutil.Environment(cmd)), runner.WithRESTConfig(restConfig), runner.WithTFStateResolver(tfstates))
 
 		if err := r.StateDiff(ctx, *tazuna, path, os.Stdout); err != nil {
 			return errors.WithStack(err)

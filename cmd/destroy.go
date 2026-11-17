@@ -59,12 +59,11 @@ Examples:
 			return err
 		}
 		environment := cliutil.Environment(cmd)
-		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts), runner.WithEnvironment(environment), runner.WithRESTConfig(restConfig))
-
-		tazuna, err := cliutil.LoadTazunaYAML(path, environment)
+		tazuna, tfstates, err := cliutil.LoadTazunaYAML(ctx, path, environment, logger)
 		if err != nil {
 			return err
 		}
+		r := runner.NewTazunaRunner(logger, k8sClient, &op.CommandClient{}, runner.WithTags(tags), runner.WithORASPullOptions(orasOpts), runner.WithEnvironment(environment), runner.WithRESTConfig(restConfig), runner.WithTFStateResolver(tfstates))
 
 		// tazuna.yamlのvalidation（include展開前のバリデーション）
 		if err := validator.ValidateTazunaWithBasePath(tazuna, filepath.Dir(path)); err != nil {

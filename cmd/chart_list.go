@@ -49,13 +49,11 @@ Examples:
 		if l, err := cliutil.NewLogger(cmd); err == nil {
 			logger = l
 		}
-
-		tazuna, err := cliutil.LoadTazunaYAML(path, cliutil.Environment(cmd))
+		tazuna, tfstates, err := cliutil.LoadTazunaYAML(ctx, path, cliutil.Environment(cmd), logger)
 		if err != nil {
 			return err
 		}
-
-		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)))
+		r := runner.NewTazunaRunner(logger, nil, nil, runner.WithEnvironment(cliutil.Environment(cmd)), runner.WithTFStateResolver(tfstates))
 
 		items, err := r.ChartList(ctx, *tazuna, path, checkLatest)
 		if err != nil {

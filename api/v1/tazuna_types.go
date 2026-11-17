@@ -52,6 +52,10 @@ type TazunaSpec struct {
 	// (1Password) のみが利用可能であり、これは GenesisSecret の .spec.provider が空文字
 	// だった場合の後方互換フォールバックとして利用されます。
 	Providers []ProviderConfig `json:"providers,omitempty"`
+	// TFStates は tfstate の参照先 (名前付きソース) の宣言リストです。
+	// helmfile vars の `from: tfstate`、template 関数 `tfstate` / `tfstateJSON`、
+	// tfstate 型の Secret provider から Name で参照されます。
+	TFStates []TFStateSource `json:"tfstates,omitempty"`
 }
 
 // EnvironmentSpec は 1 つの環境 (`environments.<name>`) の設定を定義します。
@@ -138,9 +142,10 @@ func DefaultHelmfile() *ManifestHelmfile {
 }
 
 const (
-	HelmFileVarFromEnv    = "env"
-	HelmFileVarFromStatic = "static"
-	HelmFileVarFromOp     = "op"
+	HelmFileVarFromEnv     = "env"
+	HelmFileVarFromStatic  = "static"
+	HelmFileVarFromOp      = "op"
+	HelmFileVarFromTFState = "tfstate"
 
 	HelmFileVarOpKeyID    = "id"
 	HelmFileVarOpKeyLabel = "label"
@@ -148,13 +153,14 @@ const (
 
 type HelmFileVar struct {
 	// Fromはどこからhelmfile varの値を取得するかを指定します。
-	// 現状は `env` と `op`, `static` をサポートしています
+	// 現状は `env` と `op`, `static`, `tfstate` をサポートしています
 	From        string                    `json:"from,omitempty"`
 	Op          *OnePasswordVaultSelector `json:"op,omitempty"`
 	Static      *string                   `json:"static,omitempty"`      // staticな値を指定する
 	StaticSlice []string                  `json:"staticSlice,omitempty"` // staticなslice値を指定する
 	StaticMap   map[string]string         `json:"staticMap,omitempty"`   // staticなmap値を指定する
 	Env         *string                   `json:"env,omitempty"`         // 環境変数から値を取得する
+	TFState     *TFStateRef               `json:"tfstate,omitempty"`     // tfstate から値を取得する
 }
 
 type OnePasswordVaultSelector struct {

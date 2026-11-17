@@ -1,0 +1,18 @@
+apiVersion: tazuna.pepabo.com/v1
+kind: Tazuna
+spec:
+  tfstates:
+    - name: infra
+      backend:
+        type: local
+        local:
+          path: ./terraform.tfstate
+  providers:
+    - name: tf-infra
+      type: tfstate
+      tfstate:
+        source: infra
+  manifests:
+    - name: included
+      includes:
+        - path: apps.yaml
