@@ -18,6 +18,9 @@
 2. **[環境ごとに設定を切り替える](./environments.md)** —
    `{{ .Environment }}` テンプレート変数と `spec.environments` を使い、1 つの
    `tazuna.yaml` を staging / production など複数クラスタに安全に使い回します。
+3. **[Terraform の値を使う](./terraform-values.md)** —
+   S3 などに置かれた tfstate から VPC ID や DB のパスワードを読み、helmfile vars と
+   GenesisSecret に渡します。
 
 これ以降のテーマ（複数 manifest の順序付け、`--tags` による絞り込み、
 State の確認、GenesisSecret、CI 連携など）は、ここで作った `tazuna.yaml` を

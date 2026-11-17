@@ -13,6 +13,7 @@ You describe the manifests to apply (and how to render them: `kustomize`, `helmf
 - **State management** — `state list`, `state diff`, `state sync` make drift visible
 - **Tag-based filtering** — apply a subset of a large config with `--tags`
 - **Secret integration** — generate and manage `GenesisSecret` resources backed by 1Password
+- **Terraform state references** — read values from tfstate (S3 / local backends) in helmfile vars, templates, and `GenesisSecret`
 
 ## Installation
 
